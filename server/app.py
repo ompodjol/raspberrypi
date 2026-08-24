@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
+from functools import wraps
+from flask import Response
 import json
 import os
 import threading
@@ -11,6 +13,28 @@ lock = threading.Lock()
 
 app = Flask(__name__)
 CORS(app)
+
+# Simple basic-auth for admin endpoints (username/password in env for prototype)
+ADMIN_USER = os.environ.get('RPM_ADMIN_USER', 'admin')
+ADMIN_PASS = os.environ.get('RPM_ADMIN_PASS', 'password')
+
+
+def check_auth(user, pw):
+    return user == ADMIN_USER and pw == ADMIN_PASS
+
+
+def authenticate():
+    return Response('Authentication required', 401, {'WWW-Authenticate': 'Basic realm="Login"'})
+
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
 
 
 def load_sensors():
@@ -58,6 +82,17 @@ def add_sensor():
     sensors.append(new)
     save_sensors(sensors)
     return jsonify(new), 201
+
+
+@app.route('/api/sensors/<int:sensor_id>', methods=['DELETE'])
+@requires_auth
+def delete_sensor(sensor_id):
+    sensors = load_sensors()
+    new_list = [s for s in sensors if int(s.get('id')) != int(sensor_id)]
+    if len(new_list) == len(sensors):
+        return jsonify({'error': 'not found'}), 404
+    save_sensors(new_list)
+    return jsonify({'status': 'deleted'})
 
 
 @app.route('/health')

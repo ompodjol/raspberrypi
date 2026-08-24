@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - Sensors</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#071029;color:#e6eef8;padding:20px}
+    .card{background:#0f172a;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);margin-bottom:10px}
+    button{padding:8px 10px;border-radius:6px}
+    .danger{background:#f87171;color:#2b0505;border:none}
+  </style>
+</head>
+<body>
+  <h1>Admin - Sensors</h1>
+  <p>Protected admin area (uses basic auth). Use this page to remove sample sensors.</p>
+
+  <div id="list"></div>
+
+  <script>
+    async function load(){
+      const res = await fetch('/api/sensors');
+      const items = await res.json();
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      items.forEach(s=>{
+        const el = document.createElement('div'); el.className='card';
+        el.innerHTML = `<strong>${s.name}</strong> <br/> ${s.lat}, ${s.lng} <br/> <button onclick="remove(${s.id})" class='danger'>Delete</button>`;
+        list.appendChild(el);
+      });
+    }
+
+    async function remove(id){
+      try{
+        const res = await fetch('/api/sensors/'+id, { method: 'DELETE', credentials: 'include'});
+        if(res.status===401){
+          const user = prompt('Admin username');
+          const pass = prompt('Admin password');
+          const auth = btoa(`${user}:${pass}`);
+          const res2 = await fetch('/api/sensors/'+id, { method: 'DELETE', headers: { 'Authorization': 'Basic '+auth }});
+          if(res2.ok) load(); else alert('Failed: '+res2.status);
+        } else if(res.ok){
+          load();
+        } else {
+          alert('Failed: '+res.status);
+        }
+      }catch(e){
+        alert('Error: '+e.message);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
