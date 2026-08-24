@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "name": "Temp A",
+    "lat": 51.505,
+    "lng": -0.09,
+    "info": "22.4°C"
+  },
+  {
+    "id": 2,
+    "name": "Humidity B",
+    "lat": 51.51,
+    "lng": -0.1,
+    "info": "48%"
+  },
+  {
+    "id": 3,
+    "name": "AQI C",
+    "lat": 51.499,
+    "lng": -0.08,
+    "info": "Good"
+  }
+]
