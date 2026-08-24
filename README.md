@@ -58,3 +58,17 @@ python3 -m http.server 8000
 ```
 
 This will fully restart the serving process and refresh the static page content.
+
+### Map (Sensor locations)
+
+The dashboard includes an interactive map on the main page that shows sensor locations.
+
+- Open the main page at `http://localhost:8000` and scroll to the "Sensor Map" section.
+- The map uses Leaflet + OpenStreetMap tiles (CDN). If you need an offline option, we'll add local tiles or a hosted tile provider.
+- Add a marker client-side by entering a name, latitude, and longitude, then clicking `Add sensor`.
+
+Notes:
+
+- The current map code is client-only for a quick prototype; to persist sensor locations you'll need a small backend (e.g., Flask or a simple JSON file API).
+- If your Raspberry Pi is running the server and you want remote access, ensure proper firewall/port forwarding and authentication.
+
