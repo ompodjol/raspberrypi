@@ -10,11 +10,12 @@ import jwt
 from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(__file__)
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, '..'))
 DATA_FILE = os.path.join(BASE_DIR, 'sensors.json')
 lock = threading.Lock()
 
-app = Flask(__name__)
-CORS(app)
+app = Flask(__name__, static_folder=ROOT_DIR, static_url_path='')
+CORS(app, supports_credentials=True)
 
 # Simple auth configuration (env override for prototype)
 ADMIN_USER = os.environ.get('RPM_ADMIN_USER', 'admin')
@@ -34,7 +35,19 @@ def authenticate():
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # First try bearer token
+        # Try cookie first (same-origin)
+        token = request.cookies.get('rpm_token')
+        if token:
+            try:
+                payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+                request.user = payload.get('sub')
+                return f(*args, **kwargs)
+            except jwt.ExpiredSignatureError:
+                return Response('Token expired', 401)
+            except Exception:
+                return Response('Invalid token', 401)
+
+        # Try Authorization: Bearer header
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
             token = auth_header.split(None, 1)[1]
@@ -134,7 +147,35 @@ def auth_token():
         'exp': now + JWT_EXP_SECONDS
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
-    return jsonify({'token': token})
+    # return token and set HttpOnly session cookie (same-origin)
+    resp = jsonify({'token': token})
+    resp.set_cookie('rpm_token', token, httponly=True, samesite='Lax', max_age=JWT_EXP_SECONDS)
+    return resp
+
+
+@app.route('/api/login', methods=['POST'])
+def login_cookie():
+    # same as /api/auth but sets cookie only
+    data = request.get_json() or {}
+    user = data.get('username')
+    pw = data.get('password')
+    if not user or not pw:
+        abort(400, 'username/password required')
+    if not check_auth(user, pw):
+        return Response('Unauthorized', 401)
+    now = int(time.time())
+    payload = {'sub': user, 'iat': now, 'exp': now + JWT_EXP_SECONDS}
+    token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+    resp = jsonify({'status': 'ok'})
+    resp.set_cookie('rpm_token', token, httponly=True, samesite='Lax', max_age=JWT_EXP_SECONDS)
+    return resp
+
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    resp = jsonify({'status': 'logged out'})
+    resp.set_cookie('rpm_token', '', expires=0)
+    return resp
 
 
 @app.route('/health')
