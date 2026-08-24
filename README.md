@@ -72,3 +72,60 @@ Notes:
 - The current map code is client-only for a quick prototype; to persist sensor locations you'll need a small backend (e.g., Flask or a simple JSON file API).
 - If your Raspberry Pi is running the server and you want remote access, ensure proper firewall/port forwarding and authentication.
 
+### Authentication and admin
+
+The API now supports token-based authentication for admin operations. By default the admin credentials are:
+
+- username: `admin`
+- password: `password`
+
+You can change these by exporting env vars before running the server:
+
+```bash
+export RPM_ADMIN_USER=youruser
+export RPM_ADMIN_PASS=yourpass
+export RPM_SECRET=some-long-secret
+```
+
+Obtain a token (example using curl):
+
+```bash
+curl -sS -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"password"}' http://localhost:5000/api/auth
+```
+
+The `admin.html` interface will request a token when you log in and store it in your browser's `localStorage` to authorize delete operations.
+
+### Deploy: systemd unit (example)
+
+Here is an example `systemd` unit file you can use on the Raspberry Pi to run the API with `gunicorn`:
+
+Create `/etc/systemd/system/raspberrypi.service` with:
+
+```ini
+[Unit]
+Description=Raspberry Pi Sensor API
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/repo/github/raspberrypi
+Environment=RPM_ADMIN_USER=admin
+Environment=RPM_ADMIN_PASS=password
+Environment=RPM_SECRET=change-me
+ExecStart=/home/pi/repo/github/raspberrypi/.venv/bin/gunicorn -w 3 -b 0.0.0.0:5000 server.app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable raspberrypi.service
+sudo systemctl start raspberrypi.service
+```
+
+Ensure `gunicorn` and dependencies are installed in the virtualenv referenced by `ExecStart`.
+

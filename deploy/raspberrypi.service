@@ -1,0 +1,15 @@
+[Unit]
+Description=Raspberry Pi Sensor API
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/repo/github/raspberrypi
+Environment=RPM_ADMIN_USER=admin
+Environment=RPM_ADMIN_PASS=password
+Environment=RPM_SECRET=change-me
+ExecStart=/home/pi/repo/github/raspberrypi/.venv/bin/gunicorn -w 3 -b 0.0.0.0:5000 server.app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

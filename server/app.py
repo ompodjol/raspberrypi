@@ -6,6 +6,8 @@ import json
 import os
 import threading
 import time
+import jwt
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(__file__)
 DATA_FILE = os.path.join(BASE_DIR, 'sensors.json')
@@ -14,9 +16,11 @@ lock = threading.Lock()
 app = Flask(__name__)
 CORS(app)
 
-# Simple basic-auth for admin endpoints (username/password in env for prototype)
+# Simple auth configuration (env override for prototype)
 ADMIN_USER = os.environ.get('RPM_ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('RPM_ADMIN_PASS', 'password')
+JWT_SECRET = os.environ.get('RPM_SECRET', 'dev-secret')
+JWT_EXP_SECONDS = int(os.environ.get('RPM_TOKEN_EXP', '3600'))
 
 
 def check_auth(user, pw):
@@ -30,10 +34,27 @@ def authenticate():
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        # First try bearer token
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split(None, 1)[1]
+            try:
+                payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+                request.user = payload.get('sub')
+                return f(*args, **kwargs)
+            except jwt.ExpiredSignatureError:
+                return Response('Token expired', 401)
+            except Exception:
+                return Response('Invalid token', 401)
+
+        # fallback to basic auth for convenience
         auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
-        return f(*args, **kwargs)
+        if auth and check_auth(auth.username, auth.password):
+            request.user = auth.username
+            return f(*args, **kwargs)
+
+        return authenticate()
+
     return decorated
 
 
@@ -93,6 +114,27 @@ def delete_sensor(sensor_id):
         return jsonify({'error': 'not found'}), 404
     save_sensors(new_list)
     return jsonify({'status': 'deleted'})
+
+
+@app.route('/api/auth', methods=['POST'])
+def auth_token():
+    data = request.get_json() or {}
+    user = data.get('username')
+    pw = data.get('password')
+    if not user or not pw:
+        abort(400, 'username/password required')
+
+    if not check_auth(user, pw):
+        return Response('Unauthorized', 401)
+
+    now = int(time.time())
+    payload = {
+        'sub': user,
+        'iat': now,
+        'exp': now + JWT_EXP_SECONDS
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+    return jsonify({'token': token})
 
 
 @app.route('/health')
