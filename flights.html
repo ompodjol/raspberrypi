@@ -147,6 +147,20 @@
             pointer-events: none;
         }
 
+        .radar-sweep {
+            stroke: #38bdf8;
+            stroke-width: 2;
+            opacity: .9;
+            transform-origin: 450px 260px;
+            animation: radar-sweep 4s linear infinite;
+        }
+
+        @keyframes radar-sweep {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         .radar-plane {
             font-size: 22px;
             text-anchor: middle;
@@ -318,6 +332,7 @@
                             <line x1="50" y1="260" x2="850" y2="260" />
                             <line x1="450" y1="20" x2="450" y2="500" />
                         </g>
+                        <line class="radar-sweep" x1="450" y1="260" x2="450" y2="25" />
                         <text x="462" y="250" class="radar-label">ARN</text><text x="462" y="272"
                             class="radar-label">Arlanda center</text>
                         <g id="radarAirports"></g>
@@ -408,7 +423,7 @@
         }
         function updateRadar(aircraft) {
             const aircraftSvg = document.getElementById('radarAircraft');
-            aircraftSvg.innerHTML = aircraft.filter((plane) => !plane.on_ground).map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'unknown altitude' : `${(plane.altitude_m / 1000).toFixed(1)} km`; const labelX = x > 700 ? -18 : 18; const anchor = labelX < 0 ? 'end' : 'start'; return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><text x="0" y="0" class="radar-plane airborne" transform="rotate(${plane.heading || 0})" title="${escapeHtml(plane.callsign)} | Airborne | Altitude ${altitude}">&#9992;</text><text x="${labelX}" y="0" text-anchor="${anchor}" class="radar-flight-label">${escapeHtml(plane.callsign)}</text></g>`; }).join('');
+            aircraftSvg.innerHTML = aircraft.filter((plane) => !plane.on_ground).map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'unknown altitude' : `${(plane.altitude_m / 1000).toFixed(1)} km`; return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><text x="0" y="0" class="radar-plane airborne" transform="rotate(${plane.heading || 0})" title="${escapeHtml(plane.callsign)} | Airborne | Altitude ${altitude}">&#9992;</text><text x="-18" y="0" text-anchor="end" class="radar-flight-label">${escapeHtml(plane.callsign)}</text></g>`; }).join('');
         }
         document.getElementById('flightRadar').addEventListener('click', (event) => {
             const contact = event.target.closest('[data-aircraft-id]');
