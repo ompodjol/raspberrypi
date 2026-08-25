@@ -130,6 +130,11 @@
             transform-origin: center;
         }
 
+        .plane-icon.ground {
+            color: #94a3b8;
+            opacity: .65;
+        }
+
         .flight-popup-logo {
             width: 42px;
             height: 42px;
@@ -245,6 +250,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>Flag</th>
                             <th>Callsign</th>
                             <th>Country</th>
                             <th>ICAO24</th>
@@ -252,6 +258,7 @@
                             <th class="right">Altitude</th>
                             <th class="right">Speed</th>
                             <th class="right">Heading</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody id="aircraftTable">
@@ -272,18 +279,24 @@
         const flightMap = L.map('flightMap').setView([59.6519, 17.9186], 10);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, attribution: '&copy; OpenStreetMap contributors' }).addTo(flightMap);
         const markers = new Map();
+        const countryCodes = { Sweden: 'SE', Japan: 'JP', Singapore: 'SG', Philippines: 'PH', 'United States': 'US', 'United Kingdom': 'GB', Germany: 'DE', France: 'FR', Norway: 'NO', Denmark: 'DK', Finland: 'FI', Netherlands: 'NL', Canada: 'CA', Australia: 'AU', China: 'CN', Spain: 'ES', Italy: 'IT', Turkey: 'TR', India: 'IN' };
+        function countryFlag(country) {
+            const code = countryCodes[country];
+            return code ? String.fromCodePoint(...code.split('').map((letter) => 127397 + letter.charCodeAt(0))) : '🌐';
+        }
         function airlineCode(callsign) { return (callsign || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase(); }
         function popupFor(plane) {
             const code = airlineCode(plane.callsign);
             const logo = code ? `<img class="flight-popup-logo" src="https://images.kiwi.com/airlines/64/${code}.png" alt="${escapeHtml(code)} logo" onerror="this.style.display='none'">` : '';
-            return `${logo}<strong>${escapeHtml(plane.callsign)}</strong><br>${escapeHtml(plane.origin_country)}<br>ICAO24: ${escapeHtml(plane.icao24)}<br>Altitude: ${plane.altitude_m === null ? 'ground' : `${Math.round(plane.altitude_m)} m`}<br>Speed: ${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}`;
+            const status = plane.on_ground ? 'On ground' : 'Airborne';
+            return `${logo}<strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><br>${escapeHtml(plane.origin_country)}<br>Status: ${status}<br>ICAO24: ${escapeHtml(plane.icao24)}<br>Altitude: ${plane.altitude_m === null ? 'ground' : `${Math.round(plane.altitude_m)} m`}<br>Speed: ${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}`;
         }
         function updateMap(aircraft) {
             const active = new Set();
             aircraft.forEach((plane) => {
                 active.add(plane.icao24);
                 const popup = popupFor(plane);
-                const icon = L.divIcon({ className: '', html: `<span class="plane-icon" style="transform:rotate(${plane.heading || 0}deg)">&#9992;</span>`, iconSize: [25, 25], iconAnchor: [12, 12] });
+                const icon = L.divIcon({ className: '', html: `<span class="plane-icon${plane.on_ground ? ' ground' : ''}" style="transform:rotate(${plane.heading || 0}deg)">&#9992;</span>`, iconSize: [25, 25], iconAnchor: [12, 12] });
                 if (markers.has(plane.icao24)) markers.get(plane.icao24).setLatLng([plane.latitude, plane.longitude]).setIcon(icon).setPopupContent(popup).setTooltipContent(escapeHtml(plane.callsign));
                 else markers.set(plane.icao24, L.marker([plane.latitude, plane.longitude], { icon }).addTo(flightMap).bindPopup(popup).bindTooltip(escapeHtml(plane.callsign)));
             });
@@ -300,7 +313,7 @@
             try {
                 const response = await fetch('/api/public/arlanda'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Live aircraft unavailable');
                 byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length; updateMap(data.aircraft);
-                byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td></tr>`).join('') : '<tr><td colspan="7">No aircraft detected</td></tr>';
+                byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${countryFlag(plane.origin_country)}</td><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td><td>${plane.on_ground ? 'Ground' : 'Airborne'}</td></tr>`).join('') : '<tr><td colspan="9">No aircraft detected</td></tr>';
                 byId('status').textContent = `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} | ${data.source}`; await refreshChart();
             } catch (error) { byId('status').textContent = error.message; }
         }
