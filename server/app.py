@@ -252,8 +252,8 @@ def get_public_weather(latitude, longitude):
     query = urlencode({
         'latitude': latitude,
         'longitude': longitude,
-        'current': 'temperature_2m,relative_humidity_2m',
-        'hourly': 'temperature_2m,relative_humidity_2m',
+        'current': 'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m',
+        'hourly': 'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m',
         'past_days': 1,
         'forecast_days': 1,
         'timezone': 'auto',
@@ -272,6 +272,8 @@ def get_public_weather(latitude, longitude):
                 'time': hourly.get('time', []),
                 'temperature_2m': hourly.get('temperature_2m', []),
                 'relative_humidity_2m': hourly.get('relative_humidity_2m', []),
+                'wind_speed_10m': hourly.get('wind_speed_10m', []),
+                'wind_direction_10m': hourly.get('wind_direction_10m', []),
             },
         }
     except (OSError, ValueError, KeyError):

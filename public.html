@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Public Weather Info</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <style>
         :root {
             --bg: #0f172a;
@@ -185,6 +186,12 @@
             text-align: right;
         }
 
+        #weatherMap {
+            height: 420px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
         .status {
             color: var(--muted);
             font-size: .82rem;
@@ -240,9 +247,14 @@
                             class="value">--</span></div>
                     <div class="fact"><span class="label">Humidity</span><span id="humidity" class="value">--</span>
                     </div>
+                    <div class="fact"><span class="label">Wind</span><span id="wind" class="value">--</span></div>
                     <div class="fact"><span class="label">Coordinates</span><span id="coordinates"
                             class="value">--</span></div>
                 </div>
+            </section>
+            <section class="panel">
+                <h2>Weather map</h2>
+                <div id="weatherMap" role="img" aria-label="Selected public weather location map"></div>
             </section>
             <section class="panel">
                 <h2>Hourly observations / forecast</h2>
@@ -252,19 +264,36 @@
                             <th>Time</th>
                             <th class="right">Temperature</th>
                             <th class="right">Humidity</th>
+                            <th class="right">Wind</th>
                         </tr>
                     </thead>
                     <tbody id="hourly">
                         <tr>
-                            <td colspan="3">Loading...</td>
+                            <td colspan="4">Loading...</td>
                         </tr>
                     </tbody>
                 </table>
             </section>
         </main>
     </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script>
         const byId = (id) => document.getElementById(id);
+        const weatherMap = L.map('weatherMap').setView([59.3293, 18.0686], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(weatherMap);
+        let weatherMarker;
+
+        function updateWeatherMap(data) {
+            const { latitude, longitude, current, current_units: units } = data;
+            weatherMap.setView([latitude, longitude], 9);
+            if (weatherMarker) weatherMap.removeLayer(weatherMarker);
+            weatherMarker = L.marker([latitude, longitude]).addTo(weatherMap);
+            weatherMarker.bindPopup(`<strong>${byId('city').value || 'Selected location'}</strong><br>Temperature: ${current.temperature_2m}${units.temperature_2m}<br>Humidity: ${current.relative_humidity_2m}${units.relative_humidity_2m}<br>Wind: ${current.wind_speed_10m} ${units.wind_speed_10m} (${current.wind_direction_10m}&deg;)`).openPopup();
+        }
+
         async function loadWeather() {
             const latitude = Number(byId('latitude').value); const longitude = Number(byId('longitude').value);
             if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { byId('status').textContent = 'Enter valid coordinates'; return; }
@@ -272,8 +301,9 @@
             try {
                 const response = await fetch(`/api/public/weather?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`);
                 const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Public data unavailable');
-                byId('source').textContent = data.source; byId('temperature').textContent = `${data.current.temperature_2m} ${data.current_units.temperature_2m}`; byId('humidity').textContent = `${data.current.relative_humidity_2m}${data.current_units.relative_humidity_2m}`; byId('coordinates').textContent = `${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`;
-                byId('hourly').innerHTML = data.hourly.time.map((time, index) => `<tr><td>${time}</td><td class="right">${data.hourly.temperature_2m[index]}°C</td><td class="right">${data.hourly.relative_humidity_2m[index]}%</td></tr>`).join('');
+                byId('source').textContent = data.source; byId('temperature').textContent = `${data.current.temperature_2m} ${data.current_units.temperature_2m}`; byId('humidity').textContent = `${data.current.relative_humidity_2m}${data.current_units.relative_humidity_2m}`; byId('wind').textContent = `${data.current.wind_speed_10m} ${data.current_units.wind_speed_10m} (${data.current.wind_direction_10m}°)`; byId('coordinates').textContent = `${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`;
+                updateWeatherMap(data);
+                byId('hourly').innerHTML = data.hourly.time.map((time, index) => `<tr><td>${time}</td><td class="right">${data.hourly.temperature_2m[index]}°C</td><td class="right">${data.hourly.relative_humidity_2m[index]}%</td><td class="right">${data.hourly.wind_speed_10m[index]} km/h (${data.hourly.wind_direction_10m[index]}°)</td></tr>`).join('');
                 byId('status').textContent = `Updated ${new Date().toLocaleTimeString()}`;
             } catch (error) { byId('status').textContent = error.message; }
         }
