@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pi Diagnostics</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --soft: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --border: rgba(148, 163, 184, .2);
+            --good: #86efac;
+            --warn: #fbbf24;
+            --bad: #f87171;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background: linear-gradient(135deg, #020817 0%, var(--bg) 100%);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 32px 20px 80px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: var(--text);
+            text-decoration: none;
+            background: rgba(17, 24, 39, .7);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: .85rem;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+        }
+
+        h2 {
+            margin: 0 0 16px;
+            font-size: 1.1rem;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .intro {
+            margin: 30px 0 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .panel {
+            background: rgba(17, 24, 39, .88);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .facts {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .fact {
+            background: var(--soft);
+            border-radius: 8px;
+            padding: 13px;
+            min-width: 0;
+        }
+
+        .label {
+            display: block;
+            color: var(--muted);
+            font-size: .78rem;
+            margin-bottom: 6px;
+        }
+
+        .value {
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: .78rem;
+        }
+
+        td {
+            font-size: .88rem;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .status-normal {
+            color: var(--good);
+        }
+
+        .status-warning {
+            color: var(--warn);
+        }
+
+        .status-critical {
+            color: var(--bad);
+        }
+
+        .status-unavailable {
+            color: var(--muted);
+        }
+
+        .refresh {
+            margin-top: 18px;
+            color: var(--muted);
+            font-size: .8rem;
+        }
+
+        .chart-controls {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select {
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--soft);
+            color: var(--text);
+        }
+
+        .chart {
+            width: 100%;
+            height: 260px;
+            margin-top: 12px;
+            background: rgba(15, 23, 42, .55);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .chart text {
+            fill: var(--muted);
+            font-size: 11px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: .8rem;
+        }
+
+        .legend span::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 3px;
+            margin: 0 5px 3px 0;
+            background: var(--line);
+        }
+
+        @media (max-width:760px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="topbar">
+            <div class="brand">Raspberry Pi Monitor</div>
+            <nav class="nav"><a href="index.html">Dashboard</a><a href="report.html">Report</a><a
+                    href="settings.html">Settings</a><a href="diagnostics.html">Diagnostics</a><a
+                    href="tree.html">System Tree</a></nav>
+        </header>
+        <main>
+            <div class="intro">
+                <h1>Pi diagnostics</h1>
+                <p>Live information for testing and troubleshooting this Raspberry Pi.</p>
+            </div>
+            <div class="grid">
+                <section class="panel">
+                    <h2>System information</h2>
+                    <div class="facts">
+                        <div class="fact"><span class="label">Hostname</span><span id="hostname"
+                                class="value">Loading...</span></div>
+                        <div class="fact"><span class="label">CPU cores</span><span id="cpuCount"
+                                class="value">Loading...</span></div>
+                        <div class="fact"><span class="label">Platform</span><span id="platform"
+                                class="value">Loading...</span></div>
+                        <div class="fact"><span class="label">Memory</span><span id="memory"
+                                class="value">Loading...</span></div>
+                    </div>
+                    <div id="updated" class="refresh">Waiting for telemetry...</div>
+                </section>
+                <section class="panel">
+                    <h2>Alarm state</h2>
+                    <div class="facts">
+                        <div class="fact"><span class="label">Temperature</span><span id="temperature"
+                                class="value">Loading...</span></div>
+                        <div class="fact"><span class="label">CPU load</span><span id="load"
+                                class="value">Loading...</span></div>
+                        <div class="fact"><span class="label">Temperature limits</span><span id="tempLimits"
+                                class="value">Loading...</span></div>
+                        <div class="fact"><span class="label">CPU limits</span><span id="loadLimits"
+                                class="value">Loading...</span></div>
+                    </div>
+                </section>
+            </div>
+            <section class="panel">
+                <h2>CPU usage by core</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Core</th>
+                            <th>Usage</th>
+                            <th class="right">State</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cores">
+                        <tr>
+                            <td colspan="3">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="panel">
+                <div class="chart-controls">
+                    <h2>Pi temperature history</h2><label>Range <select id="temperatureHistoryRange">
+                            <option value="10">10 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="360">6 hours</option>
+                            <option value="720">12 hours</option>
+                            <option value="1440">1 day</option>
+                            <option value="4320">3 days</option>
+                            <option value="10080">7 days</option>
+                        </select></label>
+                </div><svg id="temperatureChart" class="chart" viewBox="0 0 900 260" role="img"
+                    aria-label="Raspberry Pi temperature history">
+                    <g id="temperatureLine"></g>
+                    <line x1="44" y1="20" x2="44" y2="225" stroke="rgba(148,163,184,.35)" />
+                    <line x1="44" y1="225" x2="880" y2="225" stroke="rgba(148,163,184,.35)" />
+                    <text x="10" y="28">90°C</text><text x="10" y="128">60°C</text><text x="10" y="229">30°C</text>
+                </svg>
+                <div id="temperatureChartStatus" class="refresh">Waiting for history...</div>
+            </section>
+            <section class="panel">
+                <div class="chart-controls">
+                    <h2>CPU usage history</h2><label>Range <select id="historyRange">
+                            <option value="10">10 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="360">6 hours</option>
+                            <option value="720">12 hours</option>
+                            <option value="1440">1 day</option>
+                            <option value="4320">3 days</option>
+                            <option value="10080">7 days</option>
+                        </select></label>
+                </div><svg id="cpuChart" class="chart" viewBox="0 0 900 260" role="img"
+                    aria-label="CPU usage history by core">
+                    <g id="chartLines"></g>
+                    <line x1="44" y1="20" x2="44" y2="225" stroke="rgba(148,163,184,.35)" />
+                    <line x1="44" y1="225" x2="880" y2="225" stroke="rgba(148,163,184,.35)" /><text x="10"
+                        y="28">100%</text><text x="18" y="128">50%</text><text x="26" y="229">0%</text>
+                </svg>
+                <div id="legend" class="legend"></div>
+                <div id="chartStatus" class="refresh">Waiting for history...</div>
+            </section>
+            <section class="panel">
+                <div class="chart-controls">
+                    <h2>Process CPU history</h2><label>Range <select id="processHistoryRange">
+                            <option value="10">10 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="360">6 hours</option>
+                            <option value="720">12 hours</option>
+                            <option value="1440">1 day</option>
+                            <option value="4320">3 days</option>
+                            <option value="10080">7 days</option>
+                        </select></label>
+                    <div><svg id="processChart" class="chart" viewBox="0 0 900 260" role="img"
+                            aria-label="Average process CPU usage history">
+                            <g id="processBars"></g>
+                            <line x1="180" y1="20" x2="180" y2="235" stroke="rgba(148,163,184,.35)" />
+                            <line x1="180" y1="235" x2="880" y2="235" stroke="rgba(148,163,184,.35)" /><text x="176"
+                                y="252">0%</text><text x="510" y="252">50%</text><text x="844" y="252">100%</text>
+                        </svg>
+                        <div id="processLegend" class="legend"></div>
+                        <div id="processChartStatus" class="refresh">Waiting for history...</div>
+                    </div>
+            </section>
+            <section class="panel">
+                <h2>Top processes by CPU</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>PID</th>
+                            <th>Process</th>
+                            <th>CPU core</th>
+                            <th class="right">CPU</th>
+                            <th class="right">Memory</th>
+                        </tr>
+                    </thead>
+                    <tbody id="processes">
+                        <tr>
+                            <td colspan="5">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+    <script>
+        const byId = (id) => document.getElementById(id);
+        const coreColors = ['#38bdf8', '#22c55e', '#fbbf24', '#f87171', '#c084fc', '#fb7185', '#2dd4bf', '#a3e635'];
+        let currentThresholds = {};
+        function stateClass(state) { return `status-${state}`; }
+        async function refreshTemperatureChart() {
+            const minutes = byId('temperatureHistoryRange').value;
+            const response = await fetch(`/api/system/history?minutes=${minutes}`);
+            if (!response.ok) throw new Error('Temperature history request failed');
+            const samples = await response.json();
+            if (!samples.length || samples.every((sample) => sample.temperature_c === null)) {
+                byId('temperatureLine').innerHTML = '';
+                byId('temperatureChartStatus').textContent = 'Collecting temperature samples...';
+                return;
+            }
+            const points = samples.map((sample, index) => {
+                const value = sample.temperature_c ?? 30;
+                const x = 44 + index * 836 / Math.max(samples.length - 1, 1);
+                const y = 20 + (90 - Math.max(30, Math.min(value, 90))) * 205 / 60;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+            const yForTemperature = (value) => 20 + (90 - Math.max(30, Math.min(value, 90))) * 205 / 60;
+            const warningY = yForTemperature(currentThresholds.temperature_warning_c);
+            const criticalY = yForTemperature(currentThresholds.temperature_critical_c);
+            byId('temperatureLine').innerHTML = `<line x1="44" x2="880" y1="${warningY.toFixed(1)}" y2="${warningY.toFixed(1)}" stroke="#fbbf24" stroke-dasharray="6 4"/><text x="700" y="${(warningY - 5).toFixed(1)}" fill="#fbbf24">Warning ${currentThresholds.temperature_warning_c}°C</text><line x1="44" x2="880" y1="${criticalY.toFixed(1)}" y2="${criticalY.toFixed(1)}" stroke="#f87171" stroke-dasharray="6 4"/><text x="700" y="${(criticalY - 5).toFixed(1)}" fill="#f87171">Critical ${currentThresholds.temperature_critical_c}°C</text><polyline points="${points}" fill="none" stroke="#f97316" stroke-width="3"/>`;
+            byId('temperatureChartStatus').textContent = `${samples.length} samples, updated ${new Date().toLocaleTimeString()}`;
+        }
+        async function refreshChart() {
+            const minutes = byId('historyRange').value;
+            const response = await fetch(`/api/system/history?minutes=${minutes}`);
+            if (!response.ok) throw new Error('History request failed');
+            const samples = await response.json();
+            const lines = byId('chartLines');
+            const legend = byId('legend');
+            if (!samples.length) {
+                lines.innerHTML = '';
+                legend.innerHTML = '';
+                byId('chartStatus').textContent = 'Collecting samples. The chart will appear after the next telemetry update.';
+                return;
+            }
+            const width = 836;
+            const height = 205;
+            const pointsFor = (index) => samples.map((sample, pointIndex) => {
+                const value = sample.cores[index]?.usage_percent || 0;
+                const x = 44 + (pointIndex * width) / Math.max(samples.length - 1, 1);
+                const y = 20 + (100 - value) * height / 100;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+            const coreCount = samples[0].cores.length;
+            lines.innerHTML = Array.from({ length: coreCount }, (_, index) => `<polyline points="${pointsFor(index)}" fill="none" stroke="${coreColors[index % coreColors.length]}" stroke-width="2"/>`).join('');
+            legend.innerHTML = Array.from({ length: coreCount }, (_, index) => `<span style="--line:${coreColors[index % coreColors.length]}">CPU ${index + 1}</span>`).join('');
+            byId('chartStatus').textContent = `${samples.length} samples, updated ${new Date().toLocaleTimeString()}`;
+        }
+        async function refreshProcessChart() {
+            const minutes = byId('processHistoryRange').value;
+            const response = await fetch(`/api/system/process-history?minutes=${minutes}`);
+            if (!response.ok) throw new Error('Process history request failed');
+            const samples = await response.json();
+            const totals = {};
+            samples.forEach((sample) => sample.processes.forEach((process) => { totals[process.name] = Math.max(totals[process.name] || 0, process.cpu_percent); }));
+            const names = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name]) => name);
+            const width = 836;
+            const height = 205;
+            const bars = byId('processBars');
+            if (!samples.length || !names.length) {
+                bars.innerHTML = '';
+                byId('processLegend').innerHTML = '';
+                byId('processChartStatus').textContent = 'Collecting process samples...';
+                return;
+            }
+            const summaries = names.map((name) => {
+                const values = samples.map((sample) => sample.processes.find((entry) => entry.name === name)?.cpu_percent || 0);
+                return { name, average: values.reduce((sum, value) => sum + value, 0) / values.length, maximum: Math.max(...values) };
+            });
+            bars.innerHTML = summaries.map((process, index) => {
+                const y = 30 + index * 40;
+                const width = Math.min(process.average, 100) * 7;
+                return `<text x="10" y="${y + 15}">${process.name}</text><rect x="180" y="${y}" width="${width.toFixed(1)}" height="22" rx="4" fill="${coreColors[index]}"/><text x="${Math.min(188 + width, 785)}" y="${y + 15}">${process.average.toFixed(1)}% avg / ${process.maximum.toFixed(1)}% max</text>`;
+            }).join('');
+            byId('processLegend').innerHTML = '';
+            byId('processChartStatus').textContent = `${samples.length} samples, average and maximum CPU shown`;
+        }
+        async function refresh() {
+            try {
+                const response = await fetch('/api/system');
+                if (!response.ok) throw new Error('Telemetry request failed');
+                const data = await response.json();
+                byId('hostname').textContent = data.hostname || 'Unavailable';
+                byId('cpuCount').textContent = data.cpu_cores;
+                byId('platform').textContent = data.platform || 'Unavailable';
+                byId('memory').textContent = data.memory ? `${data.memory.used_mb} / ${data.memory.total_mb} MB (${data.memory.used_percent}%)` : 'Unavailable';
+                byId('temperature').textContent = data.temperature_c === null ? 'Unavailable' : `${data.temperature_c.toFixed(1)}°C (${data.temperature_status})`;
+                byId('temperature').className = `value ${stateClass(data.temperature_status)}`;
+                byId('load').textContent = `${data.cpu_load_percent.toFixed(1)}% (${data.cpu_status})`;
+                byId('load').className = `value ${stateClass(data.cpu_status)}`;
+                currentThresholds = data.thresholds;
+                byId('tempLimits').textContent = `${data.thresholds.temperature_warning_c}°C / ${data.thresholds.temperature_critical_c}°C`;
+                byId('loadLimits').textContent = `${data.thresholds.cpu_warning_percent}% / ${data.thresholds.cpu_critical_percent}%`;
+                byId('cores').innerHTML = data.cpu_usage_by_core.map((core) => `<tr><td>${core.name}</td><td>${core.usage_percent === null ? '--' : `${core.usage_percent.toFixed(1)}%`}</td><td class="right">${core.usage_percent === null ? 'baseline' : 'sampling'}</td></tr>`).join('');
+                byId('processes').innerHTML = data.processes.map((process) => `<tr><td>${process.pid}</td><td>${process.name}</td><td>CPU ${process.cpu_core}</td><td class="right">${process.cpu_percent.toFixed(1)}%</td><td class="right">${process.memory_percent.toFixed(1)}%</td></tr>`).join('');
+                byId('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+                await refreshChart();
+                await refreshProcessChart();
+                await refreshTemperatureChart();
+            } catch (error) { byId('updated').textContent = error.message; }
+        }
+        byId('historyRange').addEventListener('change', () => refreshChart().catch((error) => { byId('chartStatus').textContent = error.message; }));
+        byId('processHistoryRange').addEventListener('change', () => refreshProcessChart().catch((error) => { byId('processChartStatus').textContent = error.message; }));
+        byId('temperatureHistoryRange').addEventListener('change', () => refreshTemperatureChart().catch((error) => { byId('temperatureChartStatus').textContent = error.message; }));
+        refresh();
+        setInterval(refresh, 10000);
+    </script>
+</body>
+
+</html>

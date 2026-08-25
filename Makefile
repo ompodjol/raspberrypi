@@ -10,6 +10,12 @@ build-c:
 	mkdir -p build
 	gcc $(C_SRC) -o $(C_BIN)
 
+serve-api:
+	python3 server/app.py
+
+serve-static:
+	python3 -m http.server 8000
+
 run-python:
 	python3 $(PYTHON_SCRIPT)
 

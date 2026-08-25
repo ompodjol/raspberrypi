@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sensor Settings</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-soft: #1f2937;
+      --primary: #22c55e;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: rgba(148, 163, 184, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #020817 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav a {
+      color: var(--text);
+      text-decoration: none;
+      background: rgba(17, 24, 39, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+    }
+
+    .panel {
+      background: rgba(17, 24, 39, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      margin-top: 28px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    label {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      color: var(--text);
+    }
+
+    .button-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), #16a34a);
+      color: #02130a;
+    }
+
+    .btn-secondary {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--text);
+    }
+
+    @media (max-width: 640px) {
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">Raspberry Pi Monitor</div>
+      <nav class="nav">
+        <a href="index.html">Dashboard</a>
+        <a href="report.html">Report</a>
+        <a href="settings.html">Settings</a>
+        <a href="diagnostics.html">Diagnostics</a>
+        <a href="tree.html">System Tree</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h1>Sensor settings</h1>
+        <p>Set the warning and critical levels used by the live Raspberry Pi dashboard.</p>
+
+        <div class="field">
+          <label for="tempWarning">Temperature warning (°C)</label>
+          <input id="tempWarning" type="number" min="0" step="0.1" />
+        </div>
+
+        <div class="field">
+          <label for="tempCritical">Temperature critical (°C)</label>
+          <input id="tempCritical" type="number" min="0" step="0.1" />
+        </div>
+
+        <div class="field">
+          <label for="cpuWarning">CPU load warning (%)</label>
+          <input id="cpuWarning" type="number" min="0" max="100" step="0.1" />
+        </div>
+
+        <div class="field">
+          <label for="cpuCritical">CPU load critical (%)</label>
+          <input id="cpuCritical" type="number" min="0" max="100" step="0.1" />
+        </div>
+
+        <div class="button-row">
+          <button id="saveThresholds" class="btn btn-primary" type="button">Save thresholds</button>
+          <button id="resetThresholds" class="btn btn-secondary" type="button">Reset defaults</button>
+        </div>
+        <p id="settingsStatus" role="status"></p>
+      </section>
+    </main>
+  </div>
+  <script>
+    const fieldMap = {
+      tempWarning: 'temperature_warning_c',
+      tempCritical: 'temperature_critical_c',
+      cpuWarning: 'cpu_warning_percent',
+      cpuCritical: 'cpu_critical_percent'
+    };
+    const defaults = { temperature_warning_c: 70, temperature_critical_c: 80, cpu_warning_percent: 80, cpu_critical_percent: 95 };
+    const status = document.getElementById('settingsStatus');
+
+    function fillFields(values) {
+      Object.entries(fieldMap).forEach(([id, key]) => {
+        document.getElementById(id).value = values[key];
+      });
+    }
+
+    async function loadThresholds() {
+      const response = await fetch('/api/system');
+      if (!response.ok) throw new Error('Unable to load thresholds');
+      fillFields((await response.json()).thresholds);
+    }
+
+    document.getElementById('saveThresholds').addEventListener('click', async () => {
+      const values = Object.fromEntries(Object.entries(fieldMap).map(([id, key]) => [key, Number(document.getElementById(id).value)]));
+      try {
+        const response = await fetch('/api/system/thresholds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Unable to save thresholds');
+        fillFields(result);
+        status.textContent = 'Thresholds saved';
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+
+    document.getElementById('resetThresholds').addEventListener('click', () => fillFields(defaults));
+    loadThresholds().catch((error) => { status.textContent = error.message; });
+  </script>
+</body>
+
+</html>

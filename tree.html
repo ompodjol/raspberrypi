@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Tree</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --soft: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --border: rgba(148, 163, 184, .2);
+            --accent: #38bdf8;
+            --good: #86efac;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background: linear-gradient(135deg, #020817 0%, var(--bg) 100%);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 32px 20px 80px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: var(--text);
+            text-decoration: none;
+            background: rgba(17, 24, 39, .7);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: .85rem;
+        }
+
+        .intro {
+            margin: 30px 0 20px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .panel {
+            background: rgba(17, 24, 39, .88);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .tree {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .tree ul {
+            list-style: none;
+            margin: 0 0 0 24px;
+            padding: 0 0 0 24px;
+            border-left: 1px solid rgba(56, 189, 248, .35);
+        }
+
+        .tree li {
+            position: relative;
+            padding: 8px 0;
+        }
+
+        .tree ul>li::before {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 22px;
+            width: 24px;
+            border-top: 1px solid rgba(56, 189, 248, .35);
+        }
+
+        .node {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 11px 13px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--soft);
+        }
+
+        .root>.node {
+            background: rgba(56, 189, 248, .12);
+            border-color: rgba(56, 189, 248, .45);
+        }
+
+        .core>.node {
+            border-color: rgba(134, 239, 172, .35);
+        }
+
+        .name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: .8rem;
+            white-space: nowrap;
+        }
+
+        .process-node {
+            width: 100%;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .process-node:hover {
+            border-color: var(--accent);
+        }
+
+        .process-details {
+            margin: 8px 0 0 24px;
+            padding: 12px 14px;
+            border-left: 2px solid var(--accent);
+            background: rgba(56, 189, 248, .08);
+            border-radius: 0 8px 8px 0;
+            font-size: .84rem;
+        }
+
+        .process-details p {
+            margin: 5px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .status {
+            margin-top: 18px;
+            color: var(--muted);
+            font-size: .8rem;
+        }
+
+        .empty {
+            color: var(--muted);
+            padding: 10px 0;
+        }
+
+        @media (max-width:700px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .node {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="topbar">
+            <div class="brand">Raspberry Pi Monitor</div>
+            <nav class="nav"><a href="index.html">Dashboard</a><a href="report.html">Report</a><a
+                    href="settings.html">Settings</a><a href="diagnostics.html">Diagnostics</a><a
+                    href="tree.html">System Tree</a></nav>
+        </header>
+        <main>
+            <div class="intro">
+                <h1>System tree</h1>
+                <p>Live process and CPU-core relationships for this Raspberry Pi.</p>
+            </div>
+            <section class="panel">
+                <ul id="systemTree" class="tree">
+                    <li class="empty">Loading system tree...</li>
+                </ul>
+                <div id="status" class="status">Waiting for telemetry...</div>
+            </section>
+        </main>
+    </div>
+    <script>
+        const byId = (id) => document.getElementById(id);
+        const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+        async function refreshTree() {
+            try {
+                const response = await fetch('/api/system');
+                if (!response.ok) throw new Error('Telemetry request failed');
+                const data = await response.json();
+                const processesByCore = {};
+                data.processes.forEach((process) => { (processesByCore[process.cpu_core] ||= []).push(process); });
+                const cores = data.cpu_usage_by_core.map((core, index) => {
+                    const processes = processesByCore[index + 1] || [];
+                    const processNodes = processes.length ? processes.map((process) => `<li><button class="node process-node" type="button" data-pid="${process.pid}"><span class="name">${escapeHtml(process.name)} <span class="meta">(PID ${process.pid})</span></span><span class="meta">${process.cpu_percent.toFixed(1)}% CPU / ${process.memory_percent.toFixed(1)}% MEM</span></button><div class="process-details" data-details-for="${process.pid}" hidden></div></li>`).join('') : '<li class="empty">No sampled processes</li>';
+                    const usage = core.usage_percent === null ? '--' : `${core.usage_percent.toFixed(1)}%`;
+                    return `<li class="core"><div class="node"><span class="name">${core.name}</span><span class="meta">${usage} used, ${processes.length} processes</span></div><ul>${processNodes}</ul></li>`;
+                }).join('');
+                byId('systemTree').innerHTML = `<li class="root"><div class="node"><span class="name">127.0.0.1:5000</span><span class="meta">${escapeHtml(data.hostname || 'Raspberry Pi')} / ${data.cpu_cores} CPU cores</span></div><ul>${cores}</ul></li>`;
+                byId('status').textContent = `Updated ${new Date().toLocaleTimeString()} | Refreshes every 10 seconds`;
+            } catch (error) { byId('status').textContent = error.message; }
+        }
+        async function showProcessDetails(button) {
+            const pid = button.dataset.pid;
+            document.querySelectorAll('.process-details').forEach((details) => { details.hidden = true; });
+            const content = button.parentElement.querySelector(`[data-details-for="${pid}"]`);
+            content.hidden = false;
+            content.innerHTML = '<p>Loading process details...</p>';
+            try {
+                const response = await fetch(`/api/process/${pid}`);
+                const details = await response.json();
+                if (!response.ok) throw new Error(details.error || 'Process is no longer available');
+                const fields = [
+                    ['PID', details.pid], ['Name', details.name], ['State', details.state],
+                    ['Threads', details.threads], ['Memory', details.vmrss], ['Command', details.command],
+                    ['Executable', details.executable], ['Working directory', details.working_directory]
+                ];
+                content.innerHTML = fields.map(([label, value]) => `<p><strong>${label}:</strong> ${escapeHtml(value || 'Unavailable')}</p>`).join('');
+            } catch (error) {
+                content.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+            }
+        }
+        byId('systemTree').addEventListener('click', (event) => {
+            const process = event.target.closest('[data-pid]');
+            if (process) showProcessDetails(process);
+        });
+        refreshTree();
+        setInterval(refreshTree, 10000);
+    </script>
+</body>
+
+</html>

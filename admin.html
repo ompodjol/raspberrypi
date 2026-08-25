@@ -85,11 +85,11 @@
         document.getElementById('login').addEventListener('click', login);
         document.getElementById('logout').addEventListener('click', logout);
         // Check login status by probing a protected endpoint
-        (async function(){
-            try{
+        (async function () {
+            try {
                 const res = await fetch('/api/sensors', { method: 'GET', credentials: 'same-origin' });
-                if(res.ok) document.getElementById('authStatus').textContent = 'Ready';
-            }catch(e){}
+                if (res.ok) document.getElementById('authStatus').textContent = 'Ready';
+            } catch (e) { }
         })();
         load();
     </script>
