@@ -219,20 +219,24 @@
         </header>
         <main>
             <div class="intro">
-                <h1>Arlanda flight information</h1>
-                <p>Live aircraft states detected in the airspace around Stockholm Arlanda Airport (ARN).</p>
+                <h1>Stockholm airport flight information</h1>
+                <p>Live aircraft states detected around Stockholm Arlanda (ARN) and Bromma (BMA).</p>
             </div>
             <section class="grid">
                 <div class="fact"><span class="label">Aircraft nearby</span><span id="aircraftCount"
                         class="value">--</span></div>
                 <div class="fact"><span class="label">Airborne</span><span id="airborneCount" class="value">--</span>
                 </div>
-                <div class="fact"><span class="label">Airport</span><span class="value">ARN</span></div>
+                <div class="fact"><span class="label">Arlanda nearby</span><span id="arlandaCount"
+                        class="value">--</span></div>
+                <div class="fact"><span class="label">Bromma nearby</span><span id="brommaCount" class="value">--</span>
+                </div>
                 <div class="fact"><span class="label">Source</span><span class="value">OpenSky</span></div>
             </section>
             <section class="panel">
                 <h2>Live aircraft map</h2>
-                <div id="flightMap" role="img" aria-label="Live aircraft around Stockholm Arlanda Airport"></div>
+                <div id="flightMap" role="img" aria-label="Live aircraft around Stockholm Arlanda and Bromma airports">
+                </div>
                 <div id="status" class="status">Loading live aircraft...</div>
             </section>
             <section class="panel">
@@ -279,6 +283,15 @@
         const flightMap = L.map('flightMap').setView([59.6519, 17.9186], 10);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, attribution: '&copy; OpenStreetMap contributors' }).addTo(flightMap);
         const markers = new Map();
+        const airports = [{ code: 'ARN', name: 'Stockholm Arlanda Airport', latitude: 59.6519, longitude: 17.9186 }, { code: 'BMA', name: 'Stockholm Bromma Airport', latitude: 59.3544, longitude: 17.9417 }];
+        airports.forEach((airport) => L.marker([airport.latitude, airport.longitude], { title: `${airport.name} (${airport.code})` }).addTo(flightMap).bindPopup(`<strong>${airport.name}</strong><br>${airport.code}`));
+        function distanceKm(first, second) {
+            const radians = (value) => value * Math.PI / 180;
+            const latitudeDelta = radians(first.latitude - second.latitude);
+            const longitudeDelta = radians(first.longitude - second.longitude);
+            const a = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(radians(first.latitude)) * Math.cos(radians(second.latitude)) * Math.sin(longitudeDelta / 2) ** 2;
+            return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
         const countryCodes = { Sweden: 'SE', Japan: 'JP', Singapore: 'SG', Philippines: 'PH', 'United States': 'US', 'United Kingdom': 'GB', Germany: 'DE', France: 'FR', Norway: 'NO', Denmark: 'DK', Finland: 'FI', Netherlands: 'NL', Canada: 'CA', Australia: 'AU', China: 'CN', Spain: 'ES', Italy: 'IT', Turkey: 'TR', India: 'IN' };
         function countryFlag(country) {
             const code = countryCodes[country];
@@ -312,7 +325,10 @@
         async function refresh() {
             try {
                 const response = await fetch('/api/public/arlanda'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Live aircraft unavailable');
-                byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length; updateMap(data.aircraft);
+                byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length;
+                byId('arlandaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[0]) <= 15).length;
+                byId('brommaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[1]) <= 10).length;
+                updateMap(data.aircraft);
                 byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${countryFlag(plane.origin_country)}</td><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td><td>${plane.on_ground ? 'Ground' : 'Airborne'}</td></tr>`).join('') : '<tr><td colspan="9">No aircraft detected</td></tr>';
                 byId('status').textContent = `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} | ${data.source}`; await refreshChart();
             } catch (error) { byId('status').textContent = error.message; }
