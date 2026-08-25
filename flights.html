@@ -318,7 +318,7 @@
                     </svg>
                     <aside id="radarDetails" class="radar-details">Click an aircraft contact to see details.</aside>
                 </div>
-                <div class="status">Radar scale: approximately 1 degree latitude/longitude around Arlanda. Plane height
+                <div class="status">Radar shows airborne aircraft only. Callsigns such as SAS2645 identify each flight;
                     labels show altitude in km.</div>
                 <div id="status" class="status">Loading live aircraft...</div>
             </section>
@@ -401,7 +401,7 @@
         }
         function updateRadar(aircraft) {
             const aircraftSvg = document.getElementById('radarAircraft');
-            aircraftSvg.innerHTML = aircraft.map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'ground' : `${(plane.altitude_m / 1000).toFixed(1)} km`; const status = plane.on_ground ? 'On ground' : 'Airborne'; return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}"><text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-plane ${plane.on_ground ? 'ground' : 'airborne'}" style="transform:rotate(${plane.heading || 0}deg)" title="${escapeHtml(plane.callsign)} | ${status} | Altitude ${altitude}">&#9992;</text><text x="${(x + 12).toFixed(1)}" y="${(y - 12).toFixed(1)}" class="radar-label">${escapeHtml(plane.callsign)}</text></g>`; }).join('');
+            aircraftSvg.innerHTML = aircraft.filter((plane) => !plane.on_ground).map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'unknown altitude' : `${(plane.altitude_m / 1000).toFixed(1)} km`; return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}"><text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-plane airborne" style="transform:rotate(${plane.heading || 0}deg)" title="${escapeHtml(plane.callsign)} | Airborne | Altitude ${altitude}">&#9992;</text><text x="${(x + 12).toFixed(1)}" y="${(y - 12).toFixed(1)}" class="radar-label">${escapeHtml(plane.callsign)}</text></g>`; }).join('');
         }
         document.getElementById('flightRadar').addEventListener('click', (event) => {
             const contact = event.target.closest('[data-aircraft-id]');
