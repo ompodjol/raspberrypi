@@ -155,6 +155,27 @@
             fill: #94a3b8;
         }
 
+        .radar-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 240px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .radar-details {
+            min-height: 260px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, .55);
+            color: var(--muted);
+            font-size: .84rem;
+        }
+
+        .radar-details strong {
+            color: var(--text);
+        }
+
         .plane-icon {
             display: block;
             color: #38bdf8;
@@ -279,22 +300,24 @@
             </section>
             <section class="panel">
                 <h2>Radar airspace view</h2>
-                <svg id="flightRadar" viewBox="0 0 900 520" role="img"
-                    aria-label="Radar view of live aircraft around Stockholm Arlanda and Bromma airports">
-                    <rect width="900" height="520" fill="#06111f" />
-                    <g class="radar-grid">
-                        <circle cx="450" cy="260" r="80" />
-                        <circle cx="450" cy="260" r="160" />
-                        <circle cx="450" cy="260" r="240" />
-                        <circle cx="450" cy="260" r="320" />
-                        <line x1="50" y1="260" x2="850" y2="260" />
-                        <line x1="450" y1="20" x2="450" y2="500" />
-                    </g>
-                    <text x="462" y="250" class="radar-label">ARN</text><text x="462" y="272"
-                        class="radar-label">Arlanda center</text>
-                    <g id="radarAirports"></g>
-                    <g id="radarAircraft"></g>
-                </svg>
+                <div class="radar-layout"><svg id="flightRadar" viewBox="0 0 900 520" role="img"
+                        aria-label="Radar view of live aircraft around Stockholm Arlanda and Bromma airports">
+                        <rect width="900" height="520" fill="#06111f" />
+                        <g class="radar-grid">
+                            <circle cx="450" cy="260" r="80" />
+                            <circle cx="450" cy="260" r="160" />
+                            <circle cx="450" cy="260" r="240" />
+                            <circle cx="450" cy="260" r="320" />
+                            <line x1="50" y1="260" x2="850" y2="260" />
+                            <line x1="450" y1="20" x2="450" y2="500" />
+                        </g>
+                        <text x="462" y="250" class="radar-label">ARN</text><text x="462" y="272"
+                            class="radar-label">Arlanda center</text>
+                        <g id="radarAirports"></g>
+                        <g id="radarAircraft"></g>
+                    </svg>
+                    <aside id="radarDetails" class="radar-details">Click an aircraft contact to see details.</aside>
+                </div>
                 <div class="status">Radar scale: approximately 1 degree latitude/longitude around Arlanda. Plane height
                     labels show altitude in km.</div>
                 <div id="status" class="status">Loading live aircraft...</div>
@@ -378,8 +401,17 @@
         }
         function updateRadar(aircraft) {
             const aircraftSvg = document.getElementById('radarAircraft');
-            aircraftSvg.innerHTML = aircraft.map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'ground' : `${(plane.altitude_m / 1000).toFixed(1)} km`; const status = plane.on_ground ? 'On ground' : 'Airborne'; return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-plane ${plane.on_ground ? 'ground' : 'airborne'}" style="transform:rotate(${plane.heading || 0}deg)" title="${escapeHtml(plane.callsign)} | ${status} | Altitude ${altitude}">&#9992;</text><text x="${(x + 12).toFixed(1)}" y="${(y - 12).toFixed(1)}" class="radar-label">${escapeHtml(plane.callsign)} ${altitude}</text>`; }).join('');
+            aircraftSvg.innerHTML = aircraft.map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'ground' : `${(plane.altitude_m / 1000).toFixed(1)} km`; const status = plane.on_ground ? 'On ground' : 'Airborne'; return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}"><text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-plane ${plane.on_ground ? 'ground' : 'airborne'}" style="transform:rotate(${plane.heading || 0}deg)" title="${escapeHtml(plane.callsign)} | ${status} | Altitude ${altitude}">&#9992;</text><text x="${(x + 12).toFixed(1)}" y="${(y - 12).toFixed(1)}" class="radar-label">${escapeHtml(plane.callsign)}</text></g>`; }).join('');
         }
+        document.getElementById('flightRadar').addEventListener('click', (event) => {
+            const contact = event.target.closest('[data-aircraft-id]');
+            if (!contact) return;
+            const plane = lastAircraft.find((item) => item.icao24 === contact.dataset.aircraftId);
+            if (!plane) return;
+            const altitude = plane.altitude_m == null ? 'Ground' : `${Math.round(plane.altitude_m)} m`;
+            byId('radarDetails').innerHTML = `<strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><br><br>Country: ${escapeHtml(plane.origin_country)}<br>Status: ${plane.on_ground ? 'On ground' : 'Airborne'}<br>Altitude: ${altitude}<br>Speed: ${plane.speed_ms == null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading == null ? '--' : `${plane.heading.toFixed(0)}°`}<br>Position: ${plane.latitude.toFixed(4)}, ${plane.longitude.toFixed(4)}<br>ICAO24: ${escapeHtml(plane.icao24)}`;
+        });
+        let lastAircraft = [];
         async function refreshChart() {
             const response = await fetch('/api/public/arlanda/history?minutes=240'); if (!response.ok) throw new Error('Traffic history unavailable');
             const samples = await response.json(); if (!samples.length) return;
@@ -393,6 +425,7 @@
                 byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length;
                 byId('arlandaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[0]) <= 15).length;
                 byId('brommaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[1]) <= 10).length;
+                lastAircraft = data.aircraft;
                 updateRadar(data.aircraft);
                 updateMap(data.aircraft);
                 byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${countryFlag(plane.origin_country)}</td><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td><td>${plane.on_ground ? 'Ground' : 'Airborne'}</td></tr>`).join('') : '<tr><td colspan="9">No aircraft detected</td></tr>';
