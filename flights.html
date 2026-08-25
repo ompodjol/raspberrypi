@@ -5,7 +5,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Arlanda Flight Information</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <style>
         :root {
             --bg: #0f172a;
@@ -115,18 +114,38 @@
             font-weight: 700;
         }
 
-        #flightMap {
+        #flightRadar {
+            width: 100%;
             height: 520px;
             border: 1px solid var(--border);
             border-radius: 8px;
+            background: #06111f;
         }
 
-        #airspace3d {
-            height: 560px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            background: #06111f;
+        .radar-grid {
+            fill: none;
+            stroke: rgba(56, 189, 248, .28);
+            stroke-width: 1;
+        }
+
+        .radar-label {
+            fill: #9ca3af;
+            font-size: 12px;
+        }
+
+        .radar-plane {
+            font-size: 22px;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            cursor: pointer;
+        }
+
+        .radar-plane.airborne {
+            fill: #38bdf8;
+        }
+
+        .radar-plane.ground {
+            fill: #94a3b8;
         }
 
         .plane-icon {
@@ -209,7 +228,7 @@
                 overflow-x: auto;
             }
 
-            #flightMap {
+            #flightRadar {
                 min-width: 500px;
             }
         }
@@ -242,16 +261,26 @@
                 <div class="fact"><span class="label">Source</span><span class="value">OpenSky</span></div>
             </section>
             <section class="panel">
-                <h2>Live aircraft map</h2>
-                <div id="flightMap" role="img" aria-label="Live aircraft around Stockholm Arlanda and Bromma airports">
-                </div>
+                <h2>Live aircraft radar</h2>
+                <svg id="flightRadar" viewBox="0 0 900 520" role="img"
+                    aria-label="Radar view of live aircraft around Stockholm Arlanda and Bromma airports">
+                    <rect width="900" height="520" fill="#06111f" />
+                    <g class="radar-grid">
+                        <circle cx="450" cy="260" r="80" />
+                        <circle cx="450" cy="260" r="160" />
+                        <circle cx="450" cy="260" r="240" />
+                        <circle cx="450" cy="260" r="320" />
+                        <line x1="50" y1="260" x2="850" y2="260" />
+                        <line x1="450" y1="20" x2="450" y2="500" />
+                    </g>
+                    <text x="462" y="250" class="radar-label">ARN</text><text x="462" y="272"
+                        class="radar-label">Arlanda center</text>
+                    <g id="radarAirports"></g>
+                    <g id="radarAircraft"></g>
+                </svg>
+                <div class="status">Radar scale: approximately 1 degree latitude/longitude around Arlanda. Plane height
+                    labels show altitude in km.</div>
                 <div id="status" class="status">Loading live aircraft...</div>
-            </section>
-            <section class="panel">
-                <h2>3D airspace view</h2>
-                <div id="airspace3d" role="img"
-                    aria-label="Three-dimensional aircraft positions and altitudes around Stockholm"></div>
-                <div id="airspaceStatus" class="status">Loading 3D airspace...</div>
             </section>
             <section class="panel">
                 <h2>Traffic history</h2><svg id="trafficChart" class="chart" viewBox="0 0 900 260" role="img"
@@ -290,17 +319,11 @@
                 confirmed arrivals, or departures.</p>
         </main>
     </div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <script src="https://unpkg.com/three@0.140.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.140.0/examples/js/controls/OrbitControls.js"></script>
     <script>
         const byId = (id) => document.getElementById(id);
         const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
-        const flightMap = L.map('flightMap').setView([59.6519, 17.9186], 10);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, attribution: '&copy; OpenStreetMap contributors' }).addTo(flightMap);
-        const markers = new Map();
         const airports = [{ code: 'ARN', name: 'Stockholm Arlanda Airport', latitude: 59.6519, longitude: 17.9186 }, { code: 'BMA', name: 'Stockholm Bromma Airport', latitude: 59.3544, longitude: 17.9417 }];
-        airports.forEach((airport) => L.marker([airport.latitude, airport.longitude], { title: `${airport.name} (${airport.code})` }).addTo(flightMap).bindPopup(`<strong>${airport.name}</strong><br>${airport.code}`));
+        document.getElementById('radarAirports').innerHTML = airports.map((airport) => { const x = 450 + (airport.longitude - airports[0].longitude) * 700; const y = 260 - (airport.latitude - airports[0].latitude) * 700; return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="#2dd4bf"/><text x="${(x + 10).toFixed(1)}" y="${(y + 4).toFixed(1)}" class="radar-label">${airport.code}</text>`; }).join('');
         function distanceKm(first, second) {
             const radians = (value) => value * Math.PI / 180;
             const latitudeDelta = radians(first.latitude - second.latitude);
@@ -313,46 +336,6 @@
             const code = countryCodes[country];
             return code ? String.fromCodePoint(...code.split('').map((letter) => 127397 + letter.charCodeAt(0))) : '🌐';
         }
-        const airspace = (() => {
-            const container = document.getElementById('airspace3d');
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x06111f);
-            const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(55, 42, 65);
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            container.appendChild(renderer.domElement);
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 8, 0); controls.enableDamping = true;
-            scene.add(new THREE.HemisphereLight(0xbfe8ff, 0x122033, 2));
-            const grid = new THREE.GridHelper(100, 20, 0x2c5875, 0x17324a); scene.add(grid);
-            const axis = new THREE.AxesHelper(25); scene.add(axis);
-            const labels = new THREE.Group(); scene.add(labels);
-            const aircraftGroup = new THREE.Group(); scene.add(aircraftGroup);
-            const airportGroup = new THREE.Group(); scene.add(airportGroup);
-            airports.forEach((airport) => {
-                const marker = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, .5, 16), new THREE.MeshStandardMaterial({ color: airport.code === 'ARN' ? 0x38bdf8 : 0x2dd4bf }));
-                marker.position.set((airport.longitude - airports[0].longitude) * 55, .25, -(airport.latitude - airports[0].latitude) * 75); airportGroup.add(marker);
-            });
-            function resize() { camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(container.clientWidth, container.clientHeight); }
-            window.addEventListener('resize', resize);
-            function update(aircraft) {
-                while (aircraftGroup.children.length) aircraftGroup.remove(aircraftGroup.children[0]);
-                aircraft.forEach((plane) => {
-                    const altitude = Math.max(plane.altitude_m || 0, 0) / 1000;
-                    const x = (plane.longitude - airports[0].longitude) * 55;
-                    const z = -(plane.latitude - airports[0].latitude) * 75;
-                    const color = plane.on_ground ? 0xfacc15 : 0x38bdf8;
-                    const mesh = new THREE.Mesh(new THREE.ConeGeometry(.65, 2.8, 4), new THREE.MeshStandardMaterial({ color }));
-                    mesh.position.set(x, altitude, z); mesh.rotation.z = Math.PI / 2; mesh.rotation.y = -(plane.heading || 0) * Math.PI / 180;
-                    mesh.userData = plane; aircraftGroup.add(mesh);
-                });
-                document.getElementById('airspaceStatus').textContent = `${aircraft.length} aircraft plotted; vertical scale is kilometres above ground. Drag to rotate, scroll to zoom.`;
-            }
-            function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
-            animate(); return { update };
-        })();
         function airlineCode(callsign) { return (callsign || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase(); }
         function popupFor(plane) {
             const code = airlineCode(plane.callsign);
@@ -360,16 +343,9 @@
             const status = plane.on_ground ? 'On ground' : 'Airborne';
             return `${logo}<strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><br>${escapeHtml(plane.origin_country)}<br>Status: ${status}<br>ICAO24: ${escapeHtml(plane.icao24)}<br>Altitude: ${plane.altitude_m === null ? 'ground' : `${Math.round(plane.altitude_m)} m`}<br>Speed: ${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}`;
         }
-        function updateMap(aircraft) {
-            const active = new Set();
-            aircraft.forEach((plane) => {
-                active.add(plane.icao24);
-                const popup = popupFor(plane);
-                const icon = L.divIcon({ className: '', html: `<span class="plane-icon${plane.on_ground ? ' ground' : ''}" style="transform:rotate(${plane.heading || 0}deg)">&#9992;</span>`, iconSize: [25, 25], iconAnchor: [12, 12] });
-                if (markers.has(plane.icao24)) markers.get(plane.icao24).setLatLng([plane.latitude, plane.longitude]).setIcon(icon).setPopupContent(popup).setTooltipContent(escapeHtml(plane.callsign));
-                else markers.set(plane.icao24, L.marker([plane.latitude, plane.longitude], { icon }).addTo(flightMap).bindPopup(popup).bindTooltip(escapeHtml(plane.callsign)));
-            });
-            markers.forEach((marker, id) => { if (!active.has(id)) { flightMap.removeLayer(marker); markers.delete(id); } });
+        function updateRadar(aircraft) {
+            const aircraftSvg = document.getElementById('radarAircraft');
+            aircraftSvg.innerHTML = aircraft.map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'ground' : `${(plane.altitude_m / 1000).toFixed(1)} km`; const status = plane.on_ground ? 'On ground' : 'Airborne'; return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-plane ${plane.on_ground ? 'ground' : 'airborne'}" style="transform:rotate(${plane.heading || 0}deg)" title="${escapeHtml(plane.callsign)} | ${status} | Altitude ${altitude}">&#9992;</text><text x="${(x + 12).toFixed(1)}" y="${(y - 12).toFixed(1)}" class="radar-label">${escapeHtml(plane.callsign)} ${altitude}</text>`; }).join('');
         }
         async function refreshChart() {
             const response = await fetch('/api/public/arlanda/history?minutes=240'); if (!response.ok) throw new Error('Traffic history unavailable');
@@ -384,8 +360,7 @@
                 byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length;
                 byId('arlandaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[0]) <= 15).length;
                 byId('brommaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[1]) <= 10).length;
-                updateMap(data.aircraft);
-                airspace.update(data.aircraft);
+                updateRadar(data.aircraft);
                 byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${countryFlag(plane.origin_country)}</td><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td><td>${plane.on_ground ? 'Ground' : 'Airborne'}</td></tr>`).join('') : '<tr><td colspan="9">No aircraft detected</td></tr>';
                 byId('status').textContent = `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} | ${data.source}`; await refreshChart();
             } catch (error) { byId('status').textContent = error.message; }
