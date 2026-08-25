@@ -8,6 +8,9 @@ WorkingDirectory=/home/pi/repo/github/raspberrypi
 Environment=RPM_ADMIN_USER=admin
 Environment=RPM_ADMIN_PASS=password
 Environment=RPM_SECRET=change-me
+# Optional: OpenSky API Client (client credentials) raises the flight-radar rate limit from 400 to 4000 requests/day.
+# Environment=OPENSKY_CLIENT_ID=your-client-id
+# Environment=OPENSKY_CLIENT_SECRET=your-client-secret
 ExecStart=/home/pi/repo/github/raspberrypi/.venv/bin/gunicorn -w 3 -b 0.0.0.0:5000 server.app:app
 Restart=always
 

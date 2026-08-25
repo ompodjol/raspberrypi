@@ -9,6 +9,7 @@ import platform
 import subprocess
 import threading
 import time
+import math
 import jwt
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta
 BASE_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, '..'))
 DATA_FILE = os.path.join(BASE_DIR, 'sensors.json')
+ARLANDA_AGGREGATES_FILE = os.path.join(BASE_DIR, 'arlanda_aggregates.json')
 lock = threading.Lock()
 
 app = Flask(__name__, static_folder=ROOT_DIR, static_url_path='')
@@ -48,9 +50,89 @@ previous_cpu_stats = {}
 cpu_history = deque(maxlen=60480)
 process_history = deque(maxlen=60480)
 arlanda_history = deque(maxlen=2880)
+# Landing/departure event log, kept long enough to cover a 24-hour lookback window.
+arlanda_events = deque(maxlen=5000)
+arlanda_events_lock = threading.Lock()
+ARLANDA_AIRPORTS = [
+    {'code': 'ARN', 'name': 'Stockholm Arlanda Airport', 'latitude': 59.6519, 'longitude': 17.9186},
+    {'code': 'BMA', 'name': 'Stockholm Bromma Airport', 'latitude': 59.3544, 'longitude': 17.9417},
+]
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    radius = 6371
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def nearest_airport(latitude, longitude):
+    return min(ARLANDA_AIRPORTS, key=lambda airport: haversine_km(latitude, longitude, airport['latitude'], airport['longitude']))
 history_lock = threading.Lock()
+# Hourly/daily traffic aggregates, kept long enough (~400 days) to chart up to a year and persisted to survive restarts.
+arlanda_hourly = deque(maxlen=24 * 400)
+arlanda_daily = deque(maxlen=400)
+arlanda_hour_bucket = {'key': None, 'sum': 0, 'n': 0, 'peak': 0}
+arlanda_day_bucket = {'key': None, 'sum': 0, 'n': 0, 'peak': 0}
+
+
+def load_arlanda_aggregates():
+    try:
+        with open(ARLANDA_AGGREGATES_FILE) as handle:
+            saved = json.load(handle)
+    except (OSError, ValueError):
+        return
+    arlanda_hourly.extend(saved.get('hourly', []))
+    arlanda_daily.extend(saved.get('daily', []))
+
+
+def save_arlanda_aggregates():
+    try:
+        with open(ARLANDA_AGGREGATES_FILE, 'w') as handle:
+            json.dump({'hourly': list(arlanda_hourly), 'daily': list(arlanda_daily)}, handle)
+    except OSError:
+        pass
+
+
+load_arlanda_aggregates()
+
+
+def bucket_key(timestamp, granularity):
+    dt = datetime.utcfromtimestamp(timestamp)
+    if granularity == 'hour':
+        return int(datetime(dt.year, dt.month, dt.day, dt.hour).timestamp())
+    return int(datetime(dt.year, dt.month, dt.day).timestamp())
+
+
+def update_bucket(bucket_state, target_deque, timestamp, count, granularity):
+    key = bucket_key(timestamp, granularity)
+    if bucket_state['key'] is None:
+        bucket_state.update(key=key, sum=count, n=1, peak=count)
+        return
+    if key == bucket_state['key']:
+        bucket_state['sum'] += count
+        bucket_state['n'] += 1
+        bucket_state['peak'] = max(bucket_state['peak'], count)
+        return
+    target_deque.append({'timestamp': bucket_state['key'], 'aircraft_count': round(bucket_state['sum'] / bucket_state['n'], 1), 'peak_count': bucket_state['peak']})
+    save_arlanda_aggregates()
+    bucket_state.update(key=key, sum=count, n=1, peak=count)
+
+
 public_weather_cache = {}
 public_weather_lock = threading.Lock()
+arlanda_cache = {}
+arlanda_cache_lock = threading.Lock()
+boats_cache = {}
+boats_cache_lock = threading.Lock()
+# Optional OpenSky API Client (client credentials) raises the anonymous rate limit (400/day) to 4000/day.
+OPENSKY_CLIENT_ID = os.environ.get('OPENSKY_CLIENT_ID')
+OPENSKY_CLIENT_SECRET = os.environ.get('OPENSKY_CLIENT_SECRET')
+OPENSKY_TOKEN_URL = 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token'
+opensky_token_cache = {}
+opensky_token_lock = threading.Lock()
 
 
 def check_auth(user, pw):
@@ -305,50 +387,77 @@ def search_public_locations(name):
     ]
 
 
-def geocode_address(address):
-    query = urlencode({'q': address, 'format': 'jsonv2', 'limit': 5, 'addressdetails': 1})
-    request = Request(
-        f'https://nominatim.openstreetmap.org/search?{query}',
-        headers={'User-Agent': 'raspberrypi-monitor/1.0 contact=local-user'},
-    )
+
+def get_opensky_token():
+    if not (OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET):
+        return None
+    now = time.time()
+    with opensky_token_lock:
+        cached = opensky_token_cache.get('token')
+        if cached and now < cached['expires_at']:
+            return cached['access_token']
+    body = urlencode({
+        'grant_type': 'client_credentials',
+        'client_id': OPENSKY_CLIENT_ID,
+        'client_secret': OPENSKY_CLIENT_SECRET,
+    }).encode()
     try:
-        with urlopen(request, timeout=8) as response:
-            results = json.load(response)
+        with urlopen(Request(OPENSKY_TOKEN_URL, data=body, method='POST'), timeout=8) as response:
+            payload = json.load(response)
     except (OSError, ValueError):
         return None
-    return [
-        {
-            'display_name': result.get('display_name'),
-            'latitude': float(result['lat']),
-            'longitude': float(result['lon']),
+    access_token = payload.get('access_token')
+    if not access_token:
+        return None
+    with opensky_token_lock:
+        opensky_token_cache['token'] = {
+            'access_token': access_token,
+            'expires_at': now + payload.get('expires_in', 1800) - 30,
         }
-        for result in results
-        if result.get('lat') and result.get('lon')
-    ]
+    return access_token
 
 
-@app.route('/api/public/geocode')
-def public_geocode():
-    address = request.args.get('address', '').strip()
-    if len(address) < 3:
-        abort(400, 'address must contain at least 3 characters')
-    locations = geocode_address(address)
-    if locations is None:
-        return jsonify({'error': 'address lookup unavailable'}), 502
-    return jsonify(locations)
+def record_arlanda_sample(timestamp, aircraft):
+    count = len(aircraft)
+    update_bucket(arlanda_hour_bucket, arlanda_hourly, timestamp, count, 'hour')
+    update_bucket(arlanda_day_bucket, arlanda_daily, timestamp, count, 'day')
+    with history_lock:
+        if arlanda_history and timestamp - arlanda_history[-1]['timestamp'] < 60:
+            return
+        arlanda_history.append({
+            'timestamp': timestamp,
+            'aircraft_count': len(aircraft),
+            'airborne_count': sum(1 for item in aircraft if not item['on_ground']),
+            'average_altitude_m': round(sum(item['altitude_m'] or 0 for item in aircraft) / len(aircraft), 1) if aircraft else 0,
+        })
 
 
 def get_arlanda_aircraft():
+    now = time.time()
+    with arlanda_cache_lock:
+        cached = arlanda_cache.get('data')
+        if cached and now - cached['fetched_at'] < 300:
+            record_arlanda_sample(int(now), cached['data']['aircraft'])
+            return cached['data']
+
     query = urlencode({
         'lamin': 59.55,
         'lomin': 17.75,
         'lamax': 59.75,
         'lomax': 18.25,
     })
+    request_args = {}
+    token = get_opensky_token()
+    if token:
+        request_args['headers'] = {'Authorization': f'Bearer {token}'}
     try:
-        with urlopen(f'https://opensky-network.org/api/states/all?{query}', timeout=8) as response:
+        with urlopen(Request(f'https://opensky-network.org/api/states/all?{query}', **request_args), timeout=8) as response:
             payload = json.load(response)
     except (OSError, ValueError):
+        with arlanda_cache_lock:
+            cached = arlanda_cache.get('data')
+        if cached and now - cached['fetched_at'] < 600:
+            return {**cached['data'], 'stale': True}
         return None
 
     aircraft = []
@@ -369,17 +478,42 @@ def get_arlanda_aircraft():
             'squawk': state[14],
         })
     timestamp = payload.get('time') or int(time.time())
-    with history_lock:
-        arlanda_history.append({
-            'timestamp': timestamp,
-            'aircraft_count': len(aircraft),
-            'airborne_count': sum(1 for item in aircraft if not item['on_ground']),
-            'average_altitude_m': round(sum(item['altitude_m'] or 0 for item in aircraft) / len(aircraft), 1) if aircraft else 0,
-        })
-    return {'timestamp': timestamp, 'aircraft': aircraft}
+    with arlanda_cache_lock:
+        previous_states = arlanda_cache.get('states', {})
+    current_states = {}
+    new_events = []
+    for item in aircraft:
+        current_states[item['icao24']] = item['on_ground']
+        previous_on_ground = previous_states.get(item['icao24'])
+        if previous_on_ground is None:
+            continue
+        if previous_on_ground and not item['on_ground']:
+            airport = nearest_airport(item['latitude'], item['longitude'])
+            new_events.append({'timestamp': timestamp, 'type': 'departed', 'icao24': item['icao24'], 'callsign': item['callsign'], 'airport': airport['code']})
+        elif not previous_on_ground and item['on_ground']:
+            airport = nearest_airport(item['latitude'], item['longitude'])
+            new_events.append({'timestamp': timestamp, 'type': 'landed', 'icao24': item['icao24'], 'callsign': item['callsign'], 'airport': airport['code']})
+    if new_events:
+        with arlanda_events_lock:
+            arlanda_events.extend(new_events)
+    record_arlanda_sample(timestamp, aircraft)
+    result = {'timestamp': timestamp, 'aircraft': aircraft}
+    with arlanda_cache_lock:
+        arlanda_cache['data'] = {'fetched_at': now, 'data': result}
+        arlanda_cache['states'] = current_states
+    return result
 
 
 def get_stockholm_boats():
+    now = time.time()
+    with boats_cache_lock:
+        cached = boats_cache.get('data')
+        if cached and now - cached['fetched_at'] < 20:
+            return cached['data']
+        last_failure_at = boats_cache.get('last_failure_at')
+        if last_failure_at and now - last_failure_at < 20:
+            return {**cached['data'], 'stale': True} if cached else None
+
     headers = {
         'Accept': 'application/geo+json',
         'Accept-Encoding': 'gzip',
@@ -393,6 +527,11 @@ def get_stockholm_boats():
             content = response.read()
             vessels = json.loads(gzip.decompress(content) if response.headers.get('Content-Encoding') == 'gzip' else content)
     except (OSError, ValueError):
+        with boats_cache_lock:
+            cached = boats_cache.get('data')
+            boats_cache['last_failure_at'] = now
+        if cached and now - cached['fetched_at'] < 300:
+            return {**cached['data'], 'stale': True}
         return None
 
     identity = {str(vessel.get('mmsi')): vessel for vessel in vessels if vessel.get('mmsi')}
@@ -421,7 +560,10 @@ def get_stockholm_boats():
             'heading': properties.get('heading'),
             'navigation_status': properties.get('navStat'),
         })
-    return {'timestamp': locations.get('dataUpdatedTime'), 'boats': boats}
+    result = {'timestamp': locations.get('dataUpdatedTime'), 'fetched_at': int(time.time()), 'boats': boats}
+    with boats_cache_lock:
+        boats_cache['data'] = {'fetched_at': now, 'data': result}
+    return result
 
 
 @app.route('/api/public/boats')
@@ -452,14 +594,62 @@ def arlanda_aircraft():
 
 @app.route('/api/public/arlanda/history')
 def arlanda_history_data():
+    resolution = request.args.get('resolution', 'raw')
+    now = int(time.time())
+    if resolution == 'hourly':
+        try:
+            hours = max(1, min(int(request.args.get('hours', '168')), 24 * 400))
+        except ValueError:
+            abort(400, 'hours must be an integer')
+        cutoff = now - hours * 3600
+        return jsonify([sample for sample in arlanda_hourly if sample['timestamp'] >= cutoff])
+    if resolution == 'daily':
+        try:
+            days = max(1, min(int(request.args.get('days', '30')), 400))
+        except ValueError:
+            abort(400, 'days must be an integer')
+        cutoff = now - days * 86400
+        return jsonify([sample for sample in arlanda_daily if sample['timestamp'] >= cutoff])
+    if resolution == 'monthly':
+        try:
+            months = max(1, min(int(request.args.get('months', '12')), 24))
+        except ValueError:
+            abort(400, 'months must be an integer')
+        cutoff_dt = datetime.utcfromtimestamp(now) - timedelta(days=months * 31)
+        buckets = {}
+        for sample in arlanda_daily:
+            dt = datetime.utcfromtimestamp(sample['timestamp'])
+            if dt < cutoff_dt:
+                continue
+            key = (dt.year, dt.month)
+            bucket = buckets.setdefault(key, {'sum': 0, 'n': 0, 'peak': 0, 'timestamp': int(datetime(dt.year, dt.month, 1).timestamp())})
+            bucket['sum'] += sample['aircraft_count']
+            bucket['n'] += 1
+            bucket['peak'] = max(bucket['peak'], sample['peak_count'])
+        results = [{'timestamp': bucket['timestamp'], 'aircraft_count': round(bucket['sum'] / bucket['n'], 1), 'peak_count': bucket['peak']} for bucket in buckets.values()]
+        results.sort(key=lambda sample: sample['timestamp'])
+        return jsonify(results)
     try:
-        minutes = max(1, min(int(request.args.get('minutes', '60')), 1440))
+        minutes = max(1, min(int(request.args.get('minutes', '60')), 2880))
     except ValueError:
         abort(400, 'minutes must be an integer')
-    cutoff = int(time.time()) - minutes * 60
+    cutoff = now - minutes * 60
     with history_lock:
         samples = [sample for sample in arlanda_history if sample['timestamp'] >= cutoff]
     return jsonify(samples)
+
+
+@app.route('/api/public/arlanda/events')
+def arlanda_events_data():
+    try:
+        minutes = max(1, min(int(request.args.get('minutes', '30')), 1440))
+    except ValueError:
+        abort(400, 'minutes must be an integer')
+    cutoff = int(time.time()) - minutes * 60
+    with arlanda_events_lock:
+        events = [event for event in arlanda_events if event['timestamp'] >= cutoff]
+    events.sort(key=lambda event: event['timestamp'], reverse=True)
+    return jsonify(events)
 
 
 @app.route('/api/public/locations')

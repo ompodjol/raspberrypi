@@ -151,14 +151,26 @@
             stroke: #38bdf8;
             stroke-width: 2;
             opacity: .9;
-            transform-origin: 450px 260px;
-            animation: radar-sweep 4s linear infinite;
         }
 
-        @keyframes radar-sweep {
-            to {
-                transform: rotate(360deg);
+        .radar-sweep-shadow {
+            pointer-events: none;
+        }
+
+        @keyframes radar-ping {
+            0% {
+                opacity: 1;
+                font-size: 32px;
             }
+
+            100% {
+                opacity: 1;
+                font-size: 22px;
+            }
+        }
+
+        .radar-plane.pinged {
+            animation: radar-ping .8s ease-out;
         }
 
         .radar-plane {
@@ -184,13 +196,18 @@
         }
 
         .radar-details {
-            min-height: 260px;
+            min-height: 120px;
             padding: 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: rgba(15, 23, 42, .55);
             color: var(--muted);
             font-size: .84rem;
+        }
+
+        .radar-details-column {
+            display: grid;
+            gap: 12px;
         }
 
         .radar-details strong {
@@ -263,6 +280,80 @@
             margin-top: 14px;
         }
 
+        .approach-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .approach-heading {
+            font-size: .95rem;
+            margin: 0 0 10px;
+        }
+
+        .approach-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .approach-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: rgba(15, 23, 42, .55);
+            font-size: .86rem;
+        }
+
+        .approach-card strong {
+            color: var(--text);
+        }
+
+        .approach-card .meta {
+            color: var(--muted);
+            font-size: .78rem;
+            margin-top: 2px;
+        }
+
+        .approach-events {
+            margin-top: 14px;
+            font-size: .8rem;
+            color: var(--muted);
+            display: grid;
+            gap: 4px;
+        }
+
+        .approach-events-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+
+        .range-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .range-buttons button {
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .range-buttons button.active {
+            background: rgba(56, 189, 248, .18);
+            border-color: rgba(56, 189, 248, .5);
+            color: var(--text);
+        }
+
         @media (max-width:760px) {
             .topbar {
                 flex-direction: column;
@@ -284,6 +375,10 @@
             #flightMap {
                 min-width: 500px;
             }
+
+            .approach-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -295,7 +390,7 @@
             <nav class="nav"><a href="index.html">Dashboard</a><a href="report.html">Report</a><a
                     href="settings.html">Settings</a><a href="diagnostics.html">Diagnostics</a><a
                     href="tree.html">System Tree</a><a href="public.html">Public Info</a><a href="flights.html">Arlanda
-                    Flights</a><a href="boats.html">Boat AIS</a><a href="friends.html">Friends Map</a></nav>
+                    Flights</a><a href="boats.html">Boat AIS</a></nav>
         </header>
         <main>
             <div class="intro">
@@ -323,6 +418,12 @@
                 <h2>Radar airspace view</h2>
                 <div class="radar-layout"><svg id="flightRadar" viewBox="0 0 900 520" role="img"
                         aria-label="Radar view of live aircraft around Stockholm Arlanda and Bromma airports">
+                        <defs>
+                            <linearGradient id="sweepGradient" gradientUnits="userSpaceOnUse">
+                                <stop offset="0" stop-color="#38bdf8" stop-opacity="0" />
+                                <stop offset="1" stop-color="#38bdf8" stop-opacity=".45" />
+                            </linearGradient>
+                        </defs>
                         <rect width="900" height="520" fill="#06111f" />
                         <g class="radar-grid">
                             <circle cx="450" cy="260" r="80" />
@@ -332,28 +433,99 @@
                             <line x1="50" y1="260" x2="850" y2="260" />
                             <line x1="450" y1="20" x2="450" y2="500" />
                         </g>
-                        <line class="radar-sweep" x1="450" y1="260" x2="450" y2="25" />
+                        <g id="radarSweepGroup">
+                            <path id="radarSweepShadow" class="radar-sweep-shadow" fill="url(#sweepGradient)" />
+                            <line class="radar-sweep" x1="450" y1="260" x2="450" y2="25" />
+                        </g>
                         <text x="462" y="250" class="radar-label">ARN</text><text x="462" y="272"
                             class="radar-label">Arlanda center</text>
                         <g id="radarAirports"></g>
                         <g id="radarAircraft"></g>
                     </svg>
-                    <aside id="radarDetails" class="radar-details">Click an aircraft contact to see details.</aside>
+                    <aside class="radar-details-column">
+                        <aside id="radarDetails1" class="radar-details">Click an aircraft contact to see details.
+                        </aside>
+                        <aside id="radarDetails2" class="radar-details">Click a second aircraft contact to compare.
+                        </aside>
+                        <aside id="radarDetails3" class="radar-details">Click a third aircraft contact to compare.
+                        </aside>
+                    </aside>
                 </div>
                 <div class="status">Radar shows airborne aircraft only. Callsigns such as SAS2645 identify each flight;
                     labels show altitude in km.</div>
                 <div id="status" class="status">Loading live aircraft...</div>
             </section>
             <section class="panel">
-                <h2>Traffic history</h2><svg id="trafficChart" class="chart" viewBox="0 0 900 260" role="img"
+                <h2>Traffic history</h2>
+                <div class="range-buttons" id="trafficRangeButtons">
+                    <button type="button" data-resolution="raw" data-minutes="60">Last hour</button><button
+                        type="button" data-resolution="raw" data-minutes="1440" class="active">24 hours</button><button
+                        type="button" data-resolution="hourly" data-hours="168">7 days</button><button type="button"
+                        data-resolution="daily" data-days="30">30 days</button><button type="button"
+                        data-resolution="monthly" data-months="12">12 months</button>
+                </div>
+                <svg id="trafficChart" class="chart" viewBox="0 0 900 260" role="img"
                     aria-label="Aircraft traffic count history">
+                    <defs>
+                        <linearGradient id="trafficAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stop-color="#38bdf8" stop-opacity=".45" />
+                            <stop offset="1" stop-color="#38bdf8" stop-opacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <g id="trafficGridY"></g>
+                    <g id="trafficGridX"></g>
+                    <g id="trafficArea"></g>
                     <g id="trafficLines"></g>
                     <g id="trafficPoints"></g>
                     <line x1="44" y1="20" x2="44" y2="225" stroke="rgba(148,163,184,.35)" />
                     <line x1="44" y1="225" x2="880" y2="225" stroke="rgba(148,163,184,.35)" /><text x="10"
-                        y="28">count</text><text x="10" y="229">0</text>
+                        y="28">count</text>
                 </svg>
                 <div id="chartStatus" class="status">Collecting traffic samples...</div>
+            </section>
+            <section class="panel">
+                <h2>Approach &amp; departure board</h2>
+                <div class="approach-grid">
+                    <div>
+                        <h3 class="approach-heading">Approaching to land</h3>
+                        <div id="landingList" class="approach-list">
+                            <p class="status">No aircraft currently descending toward Arlanda or Bromma.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="approach-heading">Departing / climbing out</h3>
+                        <div id="departingList" class="approach-list">
+                            <p class="status">No aircraft currently climbing out.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="status">Classification uses altitude, vertical rate, and distance to each airport;
+                    touchdown ETA is estimated from the current descent rate.</div>
+                <div class="approach-events-header">
+                    <h3 class="approach-heading">Landing &amp; departure history</h3>
+                    <div class="range-buttons" id="eventRangeButtons">
+                        <button type="button" data-minutes="30" class="active">30 min</button><button type="button"
+                            data-minutes="60">1 hour</button><button type="button" data-minutes="360">6
+                            hours</button><button type="button" data-minutes="720">12 hours</button><button
+                            type="button" data-minutes="1440">24 hours</button>
+                    </div>
+                </div>
+                <div id="approachEvents" class="approach-events">
+                    <p class="status">Loading event history...</p>
+                </div>
+            </section>
+            <section class="panel">
+                <h2>Landing &amp; takeoff simulation</h2>
+                <svg id="approachSim" class="chart" viewBox="0 0 900 300" role="img"
+                    aria-label="Simulated final approach and climb-out of nearby aircraft">
+                    <text x="10" y="16" class="radar-label">Arrivals</text>
+                    <line x1="0" y1="150" x2="900" y2="150" stroke="rgba(148,163,184,.2)" />
+                    <text x="10" y="166" class="radar-label">Departures</text>
+                    <g id="landingLanes"></g>
+                    <g id="takeoffLanes"></g>
+                </svg>
+                <div id="landingSimStatus" class="status">Waiting for an aircraft on final approach.</div>
+                <div id="takeoffSimStatus" class="status">Waiting for an aircraft climbing out.</div>
             </section>
             <section class="panel">
                 <h2>Aircraft detected nearby</h2>
@@ -416,48 +588,273 @@
             mapMarkers.forEach((marker, id) => { if (!active.has(id)) { flightMap.removeLayer(marker); mapMarkers.delete(id); } });
         }
         function airlineCode(callsign) { return (callsign || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase(); }
+        const arlandaTerminalByAirline = { SAS: 5, NAX: 3, NOZ: 5, DY: 3, RYR: 2, EZY: 3, W6: 3, WZZ: 3, KLM: 2, AFR: 2, DLH: 2, BAW: 2, FIN: 5, TAP: 5, THY: 5, UAE: 5, QTR: 5, SIA: 5 };
+        function estimateTerminal(plane, airportCode) {
+            if (airportCode !== 'ARN') return 'Bromma (single terminal)';
+            const terminal = arlandaTerminalByAirline[airlineCode(plane.callsign)];
+            return terminal ? `Terminal ${terminal} (est.)` : 'Terminal 5 (est.)';
+        }
         function popupFor(plane) {
             const code = airlineCode(plane.callsign);
             const logo = code ? `<img class="flight-popup-logo" src="https://images.kiwi.com/airlines/64/${code}.png" alt="${escapeHtml(code)} logo" onerror="this.style.display='none'">` : '';
             const status = plane.on_ground ? 'On ground' : 'Airborne';
             return `${logo}<strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><br>${escapeHtml(plane.origin_country)}<br>Status: ${status}<br>ICAO24: ${escapeHtml(plane.icao24)}<br>Altitude: ${plane.altitude_m === null ? 'ground' : `${Math.round(plane.altitude_m)} m`}<br>Speed: ${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}`;
         }
-        function updateRadar(aircraft) {
-            const aircraftSvg = document.getElementById('radarAircraft');
-            aircraftSvg.innerHTML = aircraft.filter((plane) => !plane.on_ground).map((plane) => { const x = 450 + (plane.longitude - airports[0].longitude) * 700; const y = 260 - (plane.latitude - airports[0].latitude) * 700; const altitude = plane.altitude_m == null ? 'unknown altitude' : `${(plane.altitude_m / 1000).toFixed(1)} km`; return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><text x="0" y="0" class="radar-plane airborne" transform="rotate(${plane.heading || 0})" title="${escapeHtml(plane.callsign)} | Airborne | Altitude ${altitude}">&#9992;</text><text x="-18" y="0" text-anchor="end" class="radar-flight-label">${escapeHtml(plane.callsign)}</text></g>`; }).join('');
+        const radarCenter = { x: 450, y: 260 };
+        function polarToCartesian(cx, cy, r, angleDeg) {
+            const rad = (angleDeg - 90) * Math.PI / 180;
+            return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
         }
+        function describeSector(cx, cy, r, startAngle, endAngle) {
+            const start = polarToCartesian(cx, cy, r, endAngle);
+            const end = polarToCartesian(cx, cy, r, startAngle);
+            const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+            return `M ${cx} ${cy} L ${start.x.toFixed(1)} ${start.y.toFixed(1)} A ${r} ${r} 0 ${largeArc} 0 ${end.x.toFixed(1)} ${end.y.toFixed(1)} Z`;
+        }
+        function planeAngle(x, y) { return (Math.atan2(x - radarCenter.x, radarCenter.y - y) * 180 / Math.PI + 360) % 360; }
+        const sweepShadowWidth = 40;
+        const sweepShadow = document.getElementById('radarSweepShadow');
+        sweepShadow.setAttribute('d', describeSector(radarCenter.x, radarCenter.y, 235, -sweepShadowWidth, 0));
+        const sweepGradient = document.getElementById('sweepGradient');
+        const gradientStart = polarToCartesian(radarCenter.x, radarCenter.y, 235, -sweepShadowWidth);
+        const gradientEnd = polarToCartesian(radarCenter.x, radarCenter.y, 235, 0);
+        sweepGradient.setAttribute('x1', gradientStart.x.toFixed(1)); sweepGradient.setAttribute('y1', gradientStart.y.toFixed(1));
+        sweepGradient.setAttribute('x2', gradientEnd.x.toFixed(1)); sweepGradient.setAttribute('y2', gradientEnd.y.toFixed(1));
+        const radarSweepGroup = document.getElementById('radarSweepGroup');
+        const radarJitter = new Map();
+        let sweepAngle = 0;
+        function angleCrossed(previous, current, target) {
+            if (current >= previous) return target > previous && target <= current;
+            return target > previous || target <= current;
+        }
+        function stepSweep(timestamp) {
+            const previousAngle = sweepAngle;
+            sweepAngle = (timestamp / 4000 * 360) % 360;
+            radarSweepGroup.setAttribute('transform', `rotate(${sweepAngle.toFixed(2)} ${radarCenter.x} ${radarCenter.y})`);
+            let hit = false;
+            lastAircraft.filter((plane) => !plane.on_ground).forEach((plane) => {
+                const x = radarCenter.x + (plane.longitude - airports[0].longitude) * 700;
+                const y = radarCenter.y - (plane.latitude - airports[0].latitude) * 700;
+                const angle = planeAngle(x, y);
+                if (angleCrossed(previousAngle, sweepAngle, angle)) {
+                    radarJitter.set(plane.icao24, { dx: (Math.random() - 0.5) * 24, dy: (Math.random() - 0.5) * 24, hitAt: timestamp });
+                    hit = true;
+                }
+            });
+            if (hit) renderRadarAircraft();
+            requestAnimationFrame(stepSweep);
+        }
+        requestAnimationFrame(stepSweep);
+        function renderRadarAircraft() {
+            const aircraftSvg = document.getElementById('radarAircraft');
+            const now = performance.now();
+            aircraftSvg.innerHTML = lastAircraft.filter((plane) => !plane.on_ground).map((plane) => {
+                const jitter = radarJitter.get(plane.icao24);
+                const x = radarCenter.x + (plane.longitude - airports[0].longitude) * 700 + (jitter ? jitter.dx : 0);
+                const y = radarCenter.y - (plane.latitude - airports[0].latitude) * 700 + (jitter ? jitter.dy : 0);
+                const altitude = plane.altitude_m == null ? 'unknown altitude' : `${(plane.altitude_m / 1000).toFixed(1)} km`;
+                const pinged = jitter && now - jitter.hitAt < 800 ? ' pinged' : '';
+                return `<g data-aircraft-id="${escapeHtml(plane.icao24)}" tabindex="0" role="button" aria-label="${escapeHtml(plane.callsign)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><text x="0" y="0" class="radar-plane airborne${pinged}" transform="rotate(${plane.heading || 0})" title="${escapeHtml(plane.callsign)} | Airborne | Altitude ${altitude}">&#9992;</text><text x="-18" y="0" text-anchor="end" class="radar-flight-label">${escapeHtml(plane.callsign)}</text></g>`;
+            }).join('');
+            renderRadarDetails();
+        }
+        function updateRadar(aircraft) {
+            lastAircraft = aircraft;
+            renderRadarAircraft();
+        }
+        function nearestAirport(plane) {
+            let best = airports[0]; let bestDistance = Infinity;
+            airports.forEach((airport) => { const distance = distanceKm(plane, airport); if (distance < bestDistance) { bestDistance = distance; best = airport; } });
+            return { airport: best, distanceKm: bestDistance };
+        }
+        function classifyAndTrack(plane) {
+            const { airport, distanceKm: distance } = nearestAirport(plane);
+            if (plane.on_ground || plane.altitude_m == null || distance > 45) return null;
+            const verticalRate = plane.vertical_rate_ms;
+            if (verticalRate != null && verticalRate <= -1 && plane.altitude_m < 3000) {
+                const etaMinutes = verticalRate <= -0.3 ? plane.altitude_m / Math.abs(verticalRate) / 60 : null;
+                return { phase: 'landing', plane, airport, distance, etaMinutes };
+            }
+            if (verticalRate != null && verticalRate >= 1 && plane.altitude_m < 3000) return { phase: 'departing', plane, airport, distance };
+            return null;
+        }
+        function approachCard(item) {
+            const { plane, airport, distance, etaMinutes } = item;
+            const rate = plane.vertical_rate_ms == null ? '--' : `${plane.vertical_rate_ms > 0 ? '+' : ''}${plane.vertical_rate_ms.toFixed(1)} m/s`;
+            const eta = etaMinutes != null ? `<div class="meta">${etaMinutes.toFixed(1)} min to touchdown</div>` : '';
+            return `<div class="approach-card"><strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><div class="meta">${airport.code} · ${estimateTerminal(plane, airport.code)} · ${distance.toFixed(1)} km · ${Math.round(plane.altitude_m)} m · ${rate}</div>${eta}</div>`;
+        }
+        function updateApproachBoard(aircraft) {
+            const classified = aircraft.map(classifyAndTrack).filter(Boolean);
+            const landing = classified.filter((item) => item.phase === 'landing').sort((first, second) => (first.etaMinutes ?? 999) - (second.etaMinutes ?? 999));
+            const departing = classified.filter((item) => item.phase === 'departing').sort((first, second) => first.plane.altitude_m - second.plane.altitude_m);
+            byId('landingList').innerHTML = landing.length ? landing.map(approachCard).join('') : '<p class="status">No aircraft currently descending toward Arlanda or Bromma.</p>';
+            byId('departingList').innerHTML = departing.length ? departing.map(approachCard).join('') : '<p class="status">No aircraft currently climbing out.</p>';
+            landingSim.update(landing);
+            takeoffSim.update(departing);
+        }
+        const SIM_DURATION_MS = 120000;
+        const SIM_COOLDOWN_MS = 8000;
+        function formatCountdown(ms) {
+            const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+            return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+        }
+        function createLaneSimulation({ svgGroupId, statusId, startX, endX, waitingText, activeVerb, completedVerb, completedLabel, laneCount = 2, bandTop = 20, bandHeight = 120 }) {
+            const group = document.getElementById(svgGroupId);
+            const laneHeight = bandHeight / laneCount;
+            const leftX = Math.min(startX, endX);
+            const rightX = Math.max(startX, endX);
+            const planeTransform = endX < startX ? (x, y) => ` transform="translate(${(2 * x).toFixed(1)},0) scale(-1,1)"` : () => '';
+            const sims = new Map();
+            function update(candidates) {
+                sims.forEach((sim, icao24) => {
+                    if (sim.completedAt) return;
+                    if (!candidates.some((item) => item.plane.icao24 === icao24)) sims.delete(icao24);
+                });
+                const usedLanes = new Set(Array.from(sims.values()).map((sim) => sim.lane));
+                candidates.forEach((item) => {
+                    if (sims.has(item.plane.icao24) || sims.size >= laneCount) return;
+                    let lane = 0;
+                    while (usedLanes.has(lane) && lane < laneCount) lane++;
+                    if (lane >= laneCount) return;
+                    usedLanes.add(lane);
+                    sims.set(item.plane.icao24, { lane, callsign: item.plane.callsign, country: item.plane.origin_country, airport: item.airport.code, terminal: estimateTerminal(item.plane, item.airport.code), startedAt: performance.now(), completedAt: null });
+                });
+                if (!sims.size) byId(statusId).textContent = waitingText;
+            }
+            function step(timestamp) {
+                sims.forEach((sim, icao24) => {
+                    if (sim.completedAt && timestamp - sim.completedAt > SIM_COOLDOWN_MS) sims.delete(icao24);
+                });
+                const parts = [];
+                const statuses = [];
+                sims.forEach((sim) => {
+                    const y = bandTop + sim.lane * laneHeight + laneHeight / 2;
+                    const elapsed = timestamp - sim.startedAt;
+                    const remaining = Math.max(0, SIM_DURATION_MS - elapsed);
+                    const fraction = 1 - remaining / SIM_DURATION_MS;
+                    const x = startX + (endX - startX) * fraction;
+                    if (remaining === 0 && !sim.completedAt) sim.completedAt = timestamp;
+                    const countdown = remaining > 0 ? `T-${formatCountdown(remaining)}` : completedLabel;
+                    parts.push(`<line x1="${startX}" y1="${y.toFixed(1)}" x2="${endX}" y2="${y.toFixed(1)}" stroke="rgba(56,189,248,.25)" stroke-dasharray="6 6" /><text x="${leftX}" y="${(y - 12).toFixed(1)}" class="radar-flight-label">${countryFlag(sim.country)} ${escapeHtml(sim.callsign)} · ${sim.terminal}</text><text x="${(rightX - 90).toFixed(1)}" y="${(y - 12).toFixed(1)}" class="radar-flight-label" style="font-weight:700">${countdown}</text><text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-plane airborne" style="font-size:26px"${planeTransform(x, y)}>&#9992;</text>`);
+                    statuses.push(remaining > 0 ? `${sim.callsign} ${activeVerb} ${sim.airport} (${sim.terminal}).` : `${sim.callsign} ${completedVerb} ${sim.airport} (${sim.terminal}).`);
+                });
+                group.innerHTML = parts.join('');
+                if (statuses.length) byId(statusId).textContent = statuses.join(' ');
+                else if (!sims.size) byId(statusId).textContent = waitingText;
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+            return { update };
+        }
+        const landingSim = createLaneSimulation({ svgGroupId: 'landingLanes', statusId: 'landingSimStatus', startX: 60, endX: 800, waitingText: 'Waiting for an aircraft on final approach.', activeVerb: 'on final approach to', completedVerb: 'touched down at', completedLabel: 'Touchdown', bandTop: 20, bandHeight: 120 });
+        const takeoffSim = createLaneSimulation({ svgGroupId: 'takeoffLanes', statusId: 'takeoffSimStatus', startX: 800, endX: 60, waitingText: 'Waiting for an aircraft climbing out.', activeVerb: 'climbing out of', completedVerb: 'reached cruise climb from', completedLabel: 'Cruising', bandTop: 170, bandHeight: 120 });
+        let eventRangeMinutes = 30;
+        async function refreshApproachEvents() {
+            try {
+                const response = await fetch(`/api/public/arlanda/events?minutes=${eventRangeMinutes}`);
+                const events = await response.json();
+                if (!response.ok) throw new Error(events.error || 'Event history unavailable');
+                byId('approachEvents').innerHTML = events.length ? events.map((event) => `<div>${new Date(event.timestamp * 1000).toLocaleString()} \u2014 ${escapeHtml(event.callsign)} ${event.type === 'landed' ? 'landed at' : 'departed'} ${event.airport}</div>`).join('') : '<p class="status">No landings or departures recorded in this window yet.</p>';
+            } catch (error) {
+                byId('approachEvents').innerHTML = `<p class="status">${escapeHtml(error.message)}</p>`;
+            }
+        }
+        document.getElementById('eventRangeButtons').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-minutes]');
+            if (!button) return;
+            eventRangeMinutes = Number(button.dataset.minutes);
+            document.querySelectorAll('#eventRangeButtons button').forEach((element) => element.classList.toggle('active', element === button));
+            refreshApproachEvents();
+        });
+        const selectedAircraftIds = [null, null, null];
+        const radarDetailPlaceholders = ['Click an aircraft contact to see details.', 'Click a second aircraft contact to compare.', 'Click a third aircraft contact to compare.'];
+        function renderRadarDetailPane(slotIndex) {
+            const icao24 = selectedAircraftIds[slotIndex];
+            const pane = byId(`radarDetails${slotIndex + 1}`);
+            if (!icao24) { pane.innerHTML = radarDetailPlaceholders[slotIndex]; return; }
+            const plane = lastAircraft.find((item) => item.icao24 === icao24);
+            if (!plane) { pane.innerHTML = `<strong>${escapeHtml(icao24)}</strong><br>Signal lost \u2014 aircraft is out of range.`; return; }
+            const altitude = plane.altitude_m == null ? 'Ground' : `${Math.round(plane.altitude_m)} m`;
+            pane.innerHTML = `<strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><br><br>Country: ${escapeHtml(plane.origin_country)}<br>Status: ${plane.on_ground ? 'On ground' : 'Airborne'}<br>Altitude: ${altitude}<br>Speed: ${plane.speed_ms == null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading == null ? '--' : `${plane.heading.toFixed(0)}°`}<br>Position: ${plane.latitude.toFixed(4)}, ${plane.longitude.toFixed(4)}<br>ICAO24: ${escapeHtml(plane.icao24)}`;
+        }
+        function renderRadarDetails() { selectedAircraftIds.forEach((_, slotIndex) => renderRadarDetailPane(slotIndex)); }
         document.getElementById('flightRadar').addEventListener('click', (event) => {
             const contact = event.target.closest('[data-aircraft-id]');
             if (!contact) return;
-            const plane = lastAircraft.find((item) => item.icao24 === contact.dataset.aircraftId);
-            if (!plane) return;
-            const altitude = plane.altitude_m == null ? 'Ground' : `${Math.round(plane.altitude_m)} m`;
-            byId('radarDetails').innerHTML = `<strong>${countryFlag(plane.origin_country)} ${escapeHtml(plane.callsign)}</strong><br><br>Country: ${escapeHtml(plane.origin_country)}<br>Status: ${plane.on_ground ? 'On ground' : 'Airborne'}<br>Altitude: ${altitude}<br>Speed: ${plane.speed_ms == null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading == null ? '--' : `${plane.heading.toFixed(0)}°`}<br>Position: ${plane.latitude.toFixed(4)}, ${plane.longitude.toFixed(4)}<br>ICAO24: ${escapeHtml(plane.icao24)}`;
+            const icao24 = contact.dataset.aircraftId;
+            const existingSlot = selectedAircraftIds.indexOf(icao24);
+            if (existingSlot !== -1) {
+                selectedAircraftIds[existingSlot] = null;
+            } else {
+                const emptySlot = selectedAircraftIds.indexOf(null);
+                if (emptySlot !== -1) selectedAircraftIds[emptySlot] = icao24;
+                else { selectedAircraftIds.shift(); selectedAircraftIds.push(icao24); }
+            }
+            renderRadarDetails();
         });
         let lastAircraft = [];
-        async function refreshChart() {
-            const response = await fetch('/api/public/arlanda/history?minutes=240'); if (!response.ok) throw new Error('Traffic history unavailable');
-            const samples = await response.json(); if (!samples.length) return;
-            const max = Math.max(...samples.map((sample) => sample.aircraft_count), 1); const points = samples.map((sample, index) => `${(44 + index * 836 / Math.max(samples.length - 1, 1)).toFixed(1)},${(225 - sample.aircraft_count * 205 / max).toFixed(1)}`).join(' ');
-            byId('trafficLines').innerHTML = `<polyline points="${points}" fill="none" stroke="#38bdf8" stroke-width="3"/>`;
-            byId('trafficPoints').innerHTML = samples.map((sample, index) => { const x = 44 + index * 836 / Math.max(samples.length - 1, 1); const y = 225 - sample.aircraft_count * 205 / max; const time = new Date(sample.timestamp * 1000).toLocaleTimeString(); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#38bdf8"><title>${time}: ${sample.aircraft_count} aircraft</title></circle>`; }).join('');
-            const current = samples[samples.length - 1].aircraft_count;
-            byId('chartStatus').textContent = `Current: ${current} aircraft | Peak: ${max} aircraft | ${samples.length} samples over the last 4 hours. Hover points for historical values.`;
+        let trafficRange = { resolution: 'raw', params: 'minutes=1440', label: '24 hours' };
+        function formatTrafficTick(timestamp, resolution) {
+            const date = new Date(timestamp * 1000);
+            if (resolution === 'monthly') return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
+            if (resolution === 'daily') return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            if (resolution === 'hourly') return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit' });
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
+        async function refreshChart() {
+            const response = await fetch(`/api/public/arlanda/history?resolution=${trafficRange.resolution}&${trafficRange.params}`); if (!response.ok) throw new Error('Traffic history unavailable');
+            const samples = await response.json(); if (!samples.length) { byId('chartStatus').textContent = `No traffic samples yet for ${trafficRange.label}.`; return; }
+            const max = Math.max(...samples.map((sample) => sample.peak_count ?? sample.aircraft_count), 1);
+            const xFor = (index) => 44 + index * 836 / Math.max(samples.length - 1, 1);
+            const yFor = (count) => 225 - count * 205 / max;
+            const points = samples.map((sample, index) => `${xFor(index).toFixed(1)},${yFor(sample.aircraft_count).toFixed(1)}`).join(' ');
+            const yTickCount = 4;
+            byId('trafficGridY').innerHTML = Array.from({ length: yTickCount + 1 }, (_, tick) => {
+                const value = Math.round(max * tick / yTickCount);
+                const y = yFor(value);
+                return `<line x1="44" y1="${y.toFixed(1)}" x2="880" y2="${y.toFixed(1)}" stroke="rgba(148,163,184,.15)" /><text x="10" y="${(y + 4).toFixed(1)}">${value}</text>`;
+            }).join('');
+            const xTickCount = Math.min(6, samples.length);
+            byId('trafficGridX').innerHTML = Array.from({ length: xTickCount }, (_, tick) => {
+                const index = Math.round(tick * (samples.length - 1) / Math.max(xTickCount - 1, 1));
+                const x = xFor(index);
+                const time = formatTrafficTick(samples[index].timestamp, trafficRange.resolution);
+                return `<line x1="${x.toFixed(1)}" y1="20" x2="${x.toFixed(1)}" y2="225" stroke="rgba(148,163,184,.15)" /><text x="${x.toFixed(1)}" y="240" text-anchor="middle">${time}</text>`;
+            }).join('');
+            byId('trafficArea').innerHTML = `<polygon points="${xFor(0).toFixed(1)},225 ${points} ${xFor(samples.length - 1).toFixed(1)},225" fill="url(#trafficAreaGradient)" />`;
+            byId('trafficLines').innerHTML = `<polyline points="${points}" fill="none" stroke="#38bdf8" stroke-width="3"/>`;
+            byId('trafficPoints').innerHTML = samples.map((sample, index) => { const x = xFor(index); const y = yFor(sample.aircraft_count); const time = formatTrafficTick(sample.timestamp, trafficRange.resolution); const peak = sample.peak_count != null ? ` (peak ${sample.peak_count})` : ''; return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#38bdf8"><title>${time}: ${sample.aircraft_count} aircraft${peak}</title></circle>`; }).join('');
+            const current = samples[samples.length - 1].aircraft_count;
+            byId('chartStatus').textContent = `Current: ${current} aircraft | Peak: ${max} aircraft | ${samples.length} samples over ${trafficRange.label}. Hover points for historical values.`;
+        }
+        document.getElementById('trafficRangeButtons').addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button) return;
+            document.querySelectorAll('#trafficRangeButtons button').forEach((element) => element.classList.toggle('active', element === button));
+            const resolution = button.dataset.resolution;
+            const paramKey = { raw: 'minutes', hourly: 'hours', daily: 'days', monthly: 'months' }[resolution];
+            trafficRange = { resolution, params: `${paramKey}=${button.dataset[paramKey]}`, label: button.textContent };
+            refreshChart().catch((error) => { byId('chartStatus').textContent = error.message; });
+        });
         async function refresh() {
             try {
                 const response = await fetch('/api/public/arlanda'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Live aircraft unavailable');
                 byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length;
                 byId('arlandaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[0]) <= 15).length;
                 byId('brommaCount').textContent = data.aircraft.filter((plane) => distanceKm(plane, airports[1]) <= 10).length;
-                lastAircraft = data.aircraft;
                 updateRadar(data.aircraft);
                 updateMap(data.aircraft);
+                updateApproachBoard(data.aircraft);
                 byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${countryFlag(plane.origin_country)}</td><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td><td>${plane.on_ground ? 'Ground' : 'Airborne'}</td></tr>`).join('') : '<tr><td colspan="9">No aircraft detected</td></tr>';
-                byId('status').textContent = `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} | ${data.source}`; await refreshChart();
-            } catch (error) { byId('status').textContent = error.message; }
+                byId('status').textContent = `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} | ${data.source}${data.stale ? ' | showing last known data, live source is rate-limited' : ''}`; await refreshChart();
+            } catch (error) {
+                byId('status').textContent = error.message;
+                byId('aircraftTable').innerHTML = `<tr><td colspan="9">${escapeHtml(error.message)}</td></tr>`;
+            }
         }
         refresh(); setInterval(refresh, 15000);
+        refreshApproachEvents(); setInterval(refreshApproachEvents, 30000);
     </script>
 </body>
 
