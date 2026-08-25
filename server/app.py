@@ -305,6 +305,39 @@ def search_public_locations(name):
     ]
 
 
+def geocode_address(address):
+    query = urlencode({'q': address, 'format': 'jsonv2', 'limit': 5, 'addressdetails': 1})
+    request = Request(
+        f'https://nominatim.openstreetmap.org/search?{query}',
+        headers={'User-Agent': 'raspberrypi-monitor/1.0 contact=local-user'},
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            results = json.load(response)
+    except (OSError, ValueError):
+        return None
+    return [
+        {
+            'display_name': result.get('display_name'),
+            'latitude': float(result['lat']),
+            'longitude': float(result['lon']),
+        }
+        for result in results
+        if result.get('lat') and result.get('lon')
+    ]
+
+
+@app.route('/api/public/geocode')
+def public_geocode():
+    address = request.args.get('address', '').strip()
+    if len(address) < 3:
+        abort(400, 'address must contain at least 3 characters')
+    locations = geocode_address(address)
+    if locations is None:
+        return jsonify({'error': 'address lookup unavailable'}), 502
+    return jsonify(locations)
+
+
 def get_arlanda_aircraft():
     query = urlencode({
         'lamin': 59.55,
