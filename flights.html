@@ -348,6 +348,7 @@
                 <h2>Traffic history</h2><svg id="trafficChart" class="chart" viewBox="0 0 900 260" role="img"
                     aria-label="Aircraft traffic count history">
                     <g id="trafficLines"></g>
+                    <g id="trafficPoints"></g>
                     <line x1="44" y1="20" x2="44" y2="225" stroke="rgba(148,163,184,.35)" />
                     <line x1="44" y1="225" x2="880" y2="225" stroke="rgba(148,163,184,.35)" /><text x="10"
                         y="28">count</text><text x="10" y="229">0</text>
@@ -439,7 +440,9 @@
             const samples = await response.json(); if (!samples.length) return;
             const max = Math.max(...samples.map((sample) => sample.aircraft_count), 1); const points = samples.map((sample, index) => `${(44 + index * 836 / Math.max(samples.length - 1, 1)).toFixed(1)},${(225 - sample.aircraft_count * 205 / max).toFixed(1)}`).join(' ');
             byId('trafficLines').innerHTML = `<polyline points="${points}" fill="none" stroke="#38bdf8" stroke-width="3"/>`;
-            byId('chartStatus').textContent = `${samples.length} samples over the last 4 hours; peak nearby traffic ${max}`;
+            byId('trafficPoints').innerHTML = samples.map((sample, index) => { const x = 44 + index * 836 / Math.max(samples.length - 1, 1); const y = 225 - sample.aircraft_count * 205 / max; const time = new Date(sample.timestamp * 1000).toLocaleTimeString(); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#38bdf8"><title>${time}: ${sample.aircraft_count} aircraft</title></circle>`; }).join('');
+            const current = samples[samples.length - 1].aircraft_count;
+            byId('chartStatus').textContent = `Current: ${current} aircraft | Peak: ${max} aircraft | ${samples.length} samples over the last 4 hours. Hover points for historical values.`;
         }
         async function refresh() {
             try {
