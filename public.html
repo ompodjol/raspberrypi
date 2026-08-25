@@ -147,6 +147,19 @@
             cursor: pointer;
         }
 
+        .location-results {
+            display: grid;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .location-results button {
+            text-align: left;
+            background: var(--soft);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -210,9 +223,12 @@
             </div>
             <section class="panel">
                 <h2>Location</h2>
-                <div class="controls"><label>Latitude<input id="latitude" type="number" step="any"
+                <div class="controls"><label>City or place<input id="city" type="text" value="Stockholm"
+                            placeholder="Cebu, Hässelby, Singapore"></label><button id="search" type="button">Find
+                        location</button><label>Latitude<input id="latitude" type="number" step="any"
                             value="59.3293"></label><label>Longitude<input id="longitude" type="number" step="any"
                             value="18.0686"></label><button id="load" type="button">Load public data</button></div>
+                <div id="locationResults" class="location-results"></div>
                 <div id="status" class="status">Loading...</div>
             </section>
             <section class="panel">
@@ -261,6 +277,30 @@
                 byId('status').textContent = `Updated ${new Date().toLocaleTimeString()}`;
             } catch (error) { byId('status').textContent = error.message; }
         }
+        async function searchLocations() {
+            const name = byId('city').value.trim();
+            if (name.length < 2) { byId('status').textContent = 'Enter a city or place name'; return; }
+            byId('status').textContent = 'Searching locations...';
+            try {
+                const response = await fetch(`/api/public/locations?name=${encodeURIComponent(name)}`);
+                const locations = await response.json();
+                if (!response.ok) throw new Error(locations.error || 'Location search failed');
+                byId('locationResults').innerHTML = locations.length
+                    ? locations.map((location) => `<button type="button" data-lat="${location.latitude}" data-lng="${location.longitude}" data-label="${location.name}">${location.name}, ${location.admin1 || location.country || ''}</button>`).join('')
+                    : '<p>No matching locations found.</p>';
+                byId('status').textContent = `${locations.length} location results`;
+            } catch (error) { byId('status').textContent = error.message; }
+        }
+        byId('locationResults').addEventListener('click', (event) => {
+            const result = event.target.closest('[data-lat]');
+            if (!result) return;
+            byId('city').value = result.dataset.label;
+            byId('latitude').value = result.dataset.lat;
+            byId('longitude').value = result.dataset.lng;
+            byId('locationResults').innerHTML = '';
+            loadWeather();
+        });
+        byId('search').addEventListener('click', searchLocations);
         byId('load').addEventListener('click', loadWeather); loadWeather(); setInterval(loadWeather, 300000);
     </script>
 </body>

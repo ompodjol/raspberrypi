@@ -281,6 +281,37 @@ def get_public_weather(latitude, longitude):
     return data
 
 
+def search_public_locations(name):
+    query = urlencode({'name': name, 'count': 10, 'language': 'en', 'format': 'json'})
+    try:
+        with urlopen(f'https://geocoding-api.open-meteo.com/v1/search?{query}', timeout=8) as response:
+            payload = json.load(response)
+    except (OSError, ValueError):
+        return None
+    return [
+        {
+            'name': result.get('name'),
+            'country': result.get('country'),
+            'admin1': result.get('admin1'),
+            'latitude': result.get('latitude'),
+            'longitude': result.get('longitude'),
+            'timezone': result.get('timezone'),
+        }
+        for result in payload.get('results', [])
+    ]
+
+
+@app.route('/api/public/locations')
+def public_locations():
+    name = request.args.get('name', '').strip()
+    if len(name) < 2:
+        abort(400, 'location name must contain at least 2 characters')
+    locations = search_public_locations(name)
+    if locations is None:
+        return jsonify({'error': 'location search unavailable'}), 502
+    return jsonify(locations)
+
+
 @app.route('/api/public/weather')
 def public_weather():
     try:
