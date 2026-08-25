@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arlanda Flight Information</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --soft: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --border: rgba(148, 163, 184, .2);
+            --accent: #38bdf8;
+            --good: #86efac;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background: linear-gradient(135deg, #020817 0%, var(--bg) 100%);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 32px 20px 80px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: var(--text);
+            text-decoration: none;
+            background: rgba(17, 24, 39, .7);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: .85rem;
+        }
+
+        .intro {
+            margin: 30px 0 20px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+        }
+
+        h2 {
+            margin: 0 0 16px;
+            font-size: 1.1rem;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .panel {
+            background: rgba(17, 24, 39, .88);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .fact {
+            background: var(--soft);
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .label {
+            display: block;
+            color: var(--muted);
+            font-size: .78rem;
+            margin-bottom: 6px;
+        }
+
+        .value {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        #flightMap {
+            height: 520px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .chart {
+            width: 100%;
+            height: 260px;
+            background: rgba(15, 23, 42, .55);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .chart text {
+            fill: var(--muted);
+            font-size: 11px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: .78rem;
+        }
+
+        td {
+            font-size: .88rem;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: .82rem;
+            margin-top: 14px;
+        }
+
+        @media (max-width:760px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .panel {
+                overflow-x: auto;
+            }
+
+            #flightMap {
+                min-width: 500px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="topbar">
+            <div class="brand">Raspberry Pi Monitor</div>
+            <nav class="nav"><a href="index.html">Dashboard</a><a href="report.html">Report</a><a
+                    href="settings.html">Settings</a><a href="diagnostics.html">Diagnostics</a><a
+                    href="tree.html">System Tree</a><a href="public.html">Public Info</a><a href="flights.html">Arlanda
+                    Flights</a></nav>
+        </header>
+        <main>
+            <div class="intro">
+                <h1>Arlanda flight information</h1>
+                <p>Live aircraft states detected in the airspace around Stockholm Arlanda Airport (ARN).</p>
+            </div>
+            <section class="grid">
+                <div class="fact"><span class="label">Aircraft nearby</span><span id="aircraftCount"
+                        class="value">--</span></div>
+                <div class="fact"><span class="label">Airborne</span><span id="airborneCount" class="value">--</span>
+                </div>
+                <div class="fact"><span class="label">Airport</span><span class="value">ARN</span></div>
+                <div class="fact"><span class="label">Source</span><span class="value">OpenSky</span></div>
+            </section>
+            <section class="panel">
+                <h2>Live aircraft map</h2>
+                <div id="flightMap" role="img" aria-label="Live aircraft around Stockholm Arlanda Airport"></div>
+                <div id="status" class="status">Loading live aircraft...</div>
+            </section>
+            <section class="panel">
+                <h2>Traffic history</h2><svg id="trafficChart" class="chart" viewBox="0 0 900 260" role="img"
+                    aria-label="Aircraft traffic count history">
+                    <g id="trafficLines"></g>
+                    <line x1="44" y1="20" x2="44" y2="225" stroke="rgba(148,163,184,.35)" />
+                    <line x1="44" y1="225" x2="880" y2="225" stroke="rgba(148,163,184,.35)" /><text x="10"
+                        y="28">count</text><text x="10" y="229">0</text>
+                </svg>
+                <div id="chartStatus" class="status">Collecting traffic samples...</div>
+            </section>
+            <section class="panel">
+                <h2>Aircraft detected nearby</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Callsign</th>
+                            <th>Country</th>
+                            <th>ICAO24</th>
+                            <th>Position</th>
+                            <th class="right">Altitude</th>
+                            <th class="right">Speed</th>
+                            <th class="right">Heading</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aircraftTable">
+                        <tr>
+                            <td colspan="7">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            <p>OpenSky provides live transponder states. This page does not represent official airline schedules,
+                confirmed arrivals, or departures.</p>
+        </main>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        const byId = (id) => document.getElementById(id);
+        const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+        const flightMap = L.map('flightMap').setView([59.6519, 17.9186], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, attribution: '&copy; OpenStreetMap contributors' }).addTo(flightMap);
+        const markers = new Map();
+        function updateMap(aircraft) {
+            const active = new Set();
+            aircraft.forEach((plane) => {
+                active.add(plane.icao24);
+                const popup = `<strong>${escapeHtml(plane.callsign)}</strong><br>${escapeHtml(plane.origin_country)}<br>Altitude: ${plane.altitude_m === null ? 'ground' : `${Math.round(plane.altitude_m)} m`}<br>Speed: ${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}<br>Heading: ${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}`;
+                if (markers.has(plane.icao24)) markers.get(plane.icao24).setLatLng([plane.latitude, plane.longitude]).setPopupContent(popup);
+                else markers.set(plane.icao24, L.marker([plane.latitude, plane.longitude]).addTo(flightMap).bindPopup(popup));
+            });
+            markers.forEach((marker, id) => { if (!active.has(id)) { flightMap.removeLayer(marker); markers.delete(id); } });
+        }
+        async function refreshChart() {
+            const response = await fetch('/api/public/arlanda/history?minutes=240'); if (!response.ok) throw new Error('Traffic history unavailable');
+            const samples = await response.json(); if (!samples.length) return;
+            const max = Math.max(...samples.map((sample) => sample.aircraft_count), 1); const points = samples.map((sample, index) => `${(44 + index * 836 / Math.max(samples.length - 1, 1)).toFixed(1)},${(225 - sample.aircraft_count * 205 / max).toFixed(1)}`).join(' ');
+            byId('trafficLines').innerHTML = `<polyline points="${points}" fill="none" stroke="#38bdf8" stroke-width="3"/>`;
+            byId('chartStatus').textContent = `${samples.length} samples over the last 4 hours; peak nearby traffic ${max}`;
+        }
+        async function refresh() {
+            try {
+                const response = await fetch('/api/public/arlanda'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Live aircraft unavailable');
+                byId('aircraftCount').textContent = data.aircraft.length; byId('airborneCount').textContent = data.aircraft.filter((plane) => !plane.on_ground).length; updateMap(data.aircraft);
+                byId('aircraftTable').innerHTML = data.aircraft.length ? data.aircraft.map((plane) => `<tr><td>${escapeHtml(plane.callsign)}</td><td>${escapeHtml(plane.origin_country)}</td><td>${escapeHtml(plane.icao24)}</td><td>${plane.latitude.toFixed(3)}, ${plane.longitude.toFixed(3)}</td><td class="right">${plane.altitude_m === null ? 'Ground' : `${Math.round(plane.altitude_m)} m`}</td><td class="right">${plane.speed_ms === null ? '--' : `${(plane.speed_ms * 3.6).toFixed(1)} km/h`}</td><td class="right">${plane.heading === null ? '--' : `${plane.heading.toFixed(0)}°`}</td></tr>`).join('') : '<tr><td colspan="7">No aircraft detected</td></tr>';
+                byId('status').textContent = `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} | ${data.source}`; await refreshChart();
+            } catch (error) { byId('status').textContent = error.message; }
+        }
+        refresh(); setInterval(refresh, 15000);
+    </script>
+</body>
+
+</html>

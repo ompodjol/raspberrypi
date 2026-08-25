@@ -46,6 +46,7 @@ thresholds = {
 previous_cpu_stats = {}
 cpu_history = deque(maxlen=60480)
 process_history = deque(maxlen=60480)
+arlanda_history = deque(maxlen=2880)
 history_lock = threading.Lock()
 public_weather_cache = {}
 public_weather_lock = threading.Lock()
@@ -301,6 +302,73 @@ def search_public_locations(name):
         }
         for result in payload.get('results', [])
     ]
+
+
+def get_arlanda_aircraft():
+    query = urlencode({
+        'lamin': 59.55,
+        'lomin': 17.75,
+        'lamax': 59.75,
+        'lomax': 18.25,
+    })
+    try:
+        with urlopen(f'https://opensky-network.org/api/states/all?{query}', timeout=8) as response:
+            payload = json.load(response)
+    except (OSError, ValueError):
+        return None
+
+    aircraft = []
+    for state in payload.get('states') or []:
+        if len(state) < 17 or state[5] is None or state[6] is None:
+            continue
+        aircraft.append({
+            'icao24': state[0],
+            'callsign': (state[1] or '').strip() or 'Unknown',
+            'origin_country': state[2],
+            'longitude': state[5],
+            'latitude': state[6],
+            'altitude_m': state[7],
+            'on_ground': state[8],
+            'speed_ms': state[9],
+            'heading': state[10],
+            'vertical_rate_ms': state[11],
+            'squawk': state[14],
+        })
+    timestamp = payload.get('time') or int(time.time())
+    with history_lock:
+        arlanda_history.append({
+            'timestamp': timestamp,
+            'aircraft_count': len(aircraft),
+            'airborne_count': sum(1 for item in aircraft if not item['on_ground']),
+            'average_altitude_m': round(sum(item['altitude_m'] or 0 for item in aircraft) / len(aircraft), 1) if aircraft else 0,
+        })
+    return {'timestamp': timestamp, 'aircraft': aircraft}
+
+
+@app.route('/api/public/arlanda')
+def arlanda_aircraft():
+    data = get_arlanda_aircraft()
+    if data is None:
+        return jsonify({'error': 'live Arlanda aircraft source unavailable'}), 502
+    return jsonify({
+        'airport': 'Stockholm Arlanda Airport (ARN)',
+        'latitude': 59.6519,
+        'longitude': 17.9186,
+        'source': 'OpenSky Network live aircraft states',
+        **data,
+    })
+
+
+@app.route('/api/public/arlanda/history')
+def arlanda_history_data():
+    try:
+        minutes = max(1, min(int(request.args.get('minutes', '60')), 1440))
+    except ValueError:
+        abort(400, 'minutes must be an integer')
+    cutoff = int(time.time()) - minutes * 60
+    with history_lock:
+        samples = [sample for sample in arlanda_history if sample['timestamp'] >= cutoff]
+    return jsonify(samples)
 
 
 @app.route('/api/public/locations')
