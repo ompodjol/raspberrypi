@@ -3,6 +3,7 @@ from flask_cors import CORS
 from functools import wraps
 from flask import Response
 import json
+import gzip
 import os
 import platform
 import subprocess
@@ -10,7 +11,7 @@ import threading
 import time
 import jwt
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from collections import deque
 from datetime import datetime, timedelta
 
@@ -343,6 +344,63 @@ def get_arlanda_aircraft():
             'average_altitude_m': round(sum(item['altitude_m'] or 0 for item in aircraft) / len(aircraft), 1) if aircraft else 0,
         })
     return {'timestamp': timestamp, 'aircraft': aircraft}
+
+
+def get_stockholm_boats():
+    headers = {
+        'Accept': 'application/geo+json',
+        'Accept-Encoding': 'gzip',
+        'User-Agent': 'raspberrypi-monitor/1.0',
+    }
+    try:
+        with urlopen(Request('https://meri.digitraffic.fi/api/ais/v1/locations', headers=headers), timeout=8) as response:
+            content = response.read()
+            locations = json.loads(gzip.decompress(content) if response.headers.get('Content-Encoding') == 'gzip' else content)
+        with urlopen(Request('https://meri.digitraffic.fi/api/ais/v1/vessels', headers=headers), timeout=8) as response:
+            content = response.read()
+            vessels = json.loads(gzip.decompress(content) if response.headers.get('Content-Encoding') == 'gzip' else content)
+    except (OSError, ValueError):
+        return None
+
+    identity = {str(vessel.get('mmsi')): vessel for vessel in vessels if vessel.get('mmsi')}
+    boats = []
+    for feature in locations.get('features', []):
+        coordinates = feature.get('geometry', {}).get('coordinates', [])
+        if len(coordinates) < 2:
+            continue
+        longitude, latitude = coordinates
+        if not (58.8 <= latitude <= 59.9 and 17.0 <= longitude <= 19.5):
+            continue
+        properties = feature.get('properties', {})
+        mmsi = str(feature.get('mmsi') or properties.get('mmsi'))
+        boat = identity.get(mmsi, {})
+        boats.append({
+            'mmsi': mmsi,
+            'name': (boat.get('name') or '').strip() or 'Unknown vessel',
+            'call_sign': (boat.get('callSign') or '').strip() or None,
+            'destination': (boat.get('destination') or '').strip() or None,
+            'imo': boat.get('imo'),
+            'ship_type': boat.get('shipType'),
+            'longitude': longitude,
+            'latitude': latitude,
+            'speed_knots': properties.get('sog'),
+            'course': properties.get('cog'),
+            'heading': properties.get('heading'),
+            'navigation_status': properties.get('navStat'),
+        })
+    return {'timestamp': locations.get('dataUpdatedTime'), 'boats': boats}
+
+
+@app.route('/api/public/boats')
+def stockholm_boats():
+    data = get_stockholm_boats()
+    if data is None:
+        return jsonify({'error': 'public Stockholm AIS source unavailable'}), 502
+    return jsonify({
+        'area': 'Stockholm waters',
+        'source': 'Finnish Digitraffic open AIS',
+        **data,
+    })
 
 
 @app.route('/api/public/arlanda')

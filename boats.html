@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stockholm Boat AIS</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --soft: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --border: rgba(148, 163, 184, .2);
+            --accent: #2dd4bf;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background: linear-gradient(135deg, #020817 0%, var(--bg) 100%);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 32px 20px 80px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: var(--text);
+            text-decoration: none;
+            background: rgba(17, 24, 39, .7);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: .85rem;
+        }
+
+        .intro {
+            margin: 30px 0 20px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin: 0 0 16px;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .fact,
+        .panel {
+            background: rgba(17, 24, 39, .88);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .fact {
+            margin: 0;
+            background: var(--soft);
+        }
+
+        .label {
+            display: block;
+            color: var(--muted);
+            font-size: .78rem;
+            margin-bottom: 6px;
+        }
+
+        .value {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        #boatMap {
+            height: 520px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .boat-icon {
+            color: var(--accent);
+            font-size: 24px;
+            line-height: 24px;
+            text-shadow: 0 1px 4px #020817;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: .78rem;
+        }
+
+        td {
+            font-size: .86rem;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: .82rem;
+            margin-top: 14px;
+        }
+
+        @media (max-width:760px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .panel {
+                overflow-x: auto;
+            }
+
+            #boatMap {
+                min-width: 500px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="topbar">
+            <div class="brand">Raspberry Pi Monitor</div>
+            <nav class="nav"><a href="index.html">Dashboard</a><a href="public.html">Public Info</a><a
+                    href="flights.html">Arlanda Flights</a><a href="boats.html">Boat AIS</a><a
+                    href="diagnostics.html">Diagnostics</a></nav>
+        </header>
+        <main>
+            <div class="intro">
+                <h1>Stockholm boat AIS</h1>
+                <p>Live vessel positions detected in Stockholm waters using an open AIS feed.</p>
+            </div>
+            <section class="grid">
+                <div class="fact"><span class="label">Vessels nearby</span><span id="boatCount" class="value">--</span>
+                </div>
+                <div class="fact"><span class="label">Moving vessels</span><span id="movingCount"
+                        class="value">--</span></div>
+                <div class="fact"><span class="label">Source</span><span class="value">Digitraffic AIS</span></div>
+            </section>
+            <section class="panel">
+                <h2>Live vessel map</h2>
+                <div id="boatMap" role="img" aria-label="Live AIS vessels around Stockholm"></div>
+                <div id="status" class="status">Loading AIS...</div>
+            </section>
+            <section class="panel">
+                <h2>Vessels detected</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Vessel</th>
+                            <th>MMSI</th>
+                            <th>Destination</th>
+                            <th>Position</th>
+                            <th class="right">Speed</th>
+                            <th class="right">Course</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="boats">
+                        <tr>
+                            <td colspan="7">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            <p>Position data is supplied by Finnish Digitraffic open AIS and may not represent every vessel in Stockholm
+                waters. AIS identity fields may be missing.</p>
+        </main>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        const byId = (id) => document.getElementById(id); const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+        const boatMap = L.map('boatMap').setView([59.33, 18.07], 10); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, attribution: '&copy; OpenStreetMap contributors' }).addTo(boatMap); const markers = new Map();
+        function updateMap(boats) { const active = new Set(); boats.forEach((boat) => { active.add(boat.mmsi); const popup = `<strong>${escapeHtml(boat.name)}</strong><br>MMSI: ${escapeHtml(boat.mmsi)}<br>Destination: ${escapeHtml(boat.destination || 'Unknown')}<br>Speed: ${boat.speed_knots ?? '--'} knots<br>Course: ${boat.course == null ? '--' : `${boat.course.toFixed(0)}°`}`; const icon = L.divIcon({ className: '', html: `<span class="boat-icon" style="display:block;transform:rotate(${boat.heading || boat.course || 0}deg)">&#9875;</span>`, iconSize: [24, 24], iconAnchor: [12, 12] }); if (markers.has(boat.mmsi)) markers.get(boat.mmsi).setLatLng([boat.latitude, boat.longitude]).setIcon(icon).setPopupContent(popup); else markers.set(boat.mmsi, L.marker([boat.latitude, boat.longitude], { icon }).addTo(boatMap).bindPopup(popup)); }); markers.forEach((marker, id) => { if (!active.has(id)) { boatMap.removeLayer(marker); markers.delete(id); } }); }
+        async function refresh() { try { const response = await fetch('/api/public/boats'); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'AIS unavailable'); const moving = data.boats.filter((boat) => boat.speed_knots > 0.2); byId('boatCount').textContent = data.boats.length; byId('movingCount').textContent = moving.length; updateMap(data.boats); byId('boats').innerHTML = data.boats.length ? data.boats.map((boat) => `<tr><td>${escapeHtml(boat.name)}</td><td>${escapeHtml(boat.mmsi)}</td><td>${escapeHtml(boat.destination || '--')}</td><td>${boat.latitude.toFixed(3)}, ${boat.longitude.toFixed(3)}</td><td class="right">${boat.speed_knots ?? '--'} kn</td><td class="right">${boat.course == null ? '--' : `${boat.course.toFixed(0)}°`}</td><td>${boat.speed_knots > 0.2 ? 'Moving' : 'Stationary'}</td></tr>`).join('') : '<tr><td colspan="7">No vessels detected</td></tr>'; byId('status').textContent = `Updated ${data.timestamp || new Date().toISOString()} | ${data.source}`; } catch (error) { byId('status').textContent = error.message; } }
+        refresh(); setInterval(refresh, 30000);
+    </script>
+</body>
+
+</html>
