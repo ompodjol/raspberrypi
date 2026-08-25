@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Friends Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --soft: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --border: rgba(148, 163, 184, .2);
+            --accent: #fbbf24;
+            --good: #86efac;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background: linear-gradient(135deg, #020817 0%, var(--bg) 100%);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 32px 20px 80px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: var(--text);
+            text-decoration: none;
+            background: rgba(17, 24, 39, .7);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: .85rem;
+        }
+
+        .intro {
+            margin: 30px 0 20px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin: 0 0 16px;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .panel {
+            background: rgba(17, 24, 39, .88);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        #friendsMap {
+            height: 620px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .fields {
+            display: grid;
+            gap: 12px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: .82rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--soft);
+            color: var(--text);
+        }
+
+        .coordinates {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: 0;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #241900;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: rgba(56, 189, 248, .15);
+            border: 1px solid rgba(56, 189, 248, .35);
+            color: var(--text);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: .78rem;
+        }
+
+        td {
+            font-size: .86rem;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: .82rem;
+            margin-top: 14px;
+        }
+
+        .friend-icon {
+            font-size: 25px;
+            text-shadow: 0 1px 4px #020817;
+        }
+
+        @media (max-width:800px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            #friendsMap {
+                height: 480px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="topbar">
+            <div class="brand">Raspberry Pi Monitor</div>
+            <nav class="nav"><a href="index.html">Dashboard</a><a href="public.html">Public Info</a><a
+                    href="flights.html">Arlanda Flights</a><a href="boats.html">Boat AIS</a><a
+                    href="diagnostics.html">Diagnostics</a><a href="friends.html">Friends Map</a></nav>
+        </header>
+        <main>
+            <div class="intro">
+                <h1>Filipino friends in Sweden</h1>
+                <p>A private local map for your personal contacts. Friend details stay in this browser and are not sent
+                    to the server.</p>
+            </div>
+            <div class="grid">
+                <section class="panel">
+                    <h2>Friends map</h2>
+                    <div id="friendsMap" role="img" aria-label="Private map of Filipino friends in Sweden"></div>
+                    <div id="mapStatus" class="status">Map centered on Sweden.</div>
+                </section>
+                <section class="panel">
+                    <h2>Add friend</h2>
+                    <div class="fields"><label>Name<input id="name" autocomplete="name"
+                                placeholder="Friend name"></label><label>Address<input id="address"
+                                autocomplete="street-address" placeholder="Address in Sweden"></label><label>Phone<input
+                                id="phone" autocomplete="tel" placeholder="Phone number"></label>
+                        <div class="coordinates"><label>Latitude<input id="latitude" type="number" step="any"
+                                    placeholder="59.3293"></label><label>Longitude<input id="longitude" type="number"
+                                    step="any" placeholder="18.0686"></label></div>
+                    </div>
+                    <div class="buttons"><button id="add" type="button">Add friend</button><button id="locate"
+                            type="button" class="secondary">Use my location</button></div>
+                    <div class="buttons"><button id="export" type="button" class="secondary">Export private
+                            data</button><button id="importButton" type="button" class="secondary">Import private
+                            data</button><input id="importFile" type="file" accept="application/json" hidden></div>
+                    <div id="formStatus" class="status">Click the map to set coordinates.</div>
+                </section>
+            </div>
+            <section class="panel">
+                <h2>Friend directory</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Address</th>
+                            <th>Phone</th>
+                            <th class="right">Distance</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="friends">
+                        <tr>
+                            <td colspan="5">No friends added yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        const byId = (id) => document.getElementById(id); const storageKey = 'raspberrypi-filipino-friends'; let friends = JSON.parse(localStorage.getItem(storageKey) || '[]'); let userLocation = null;
+        const friendsMap = L.map('friendsMap').setView([59.3293, 18.0686], 6); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' }).addTo(friendsMap); const markers = new Map();
+        const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+        function distanceKm(a, b) { const rad = (value) => value * Math.PI / 180; const dLat = rad(a.latitude - b.latitude); const dLng = rad(a.longitude - b.longitude); const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLng / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)); }
+        function save() { localStorage.setItem(storageKey, JSON.stringify(friends)); }
+        function render() { markers.forEach((marker) => friendsMap.removeLayer(marker)); markers.clear(); friends.forEach((friend, index) => { const icon = L.divIcon({ className: '', html: '<span class="friend-icon">&#127477;&#127469;</span>', iconSize: [25, 25], iconAnchor: [12, 12] }); const distance = userLocation ? `${distanceKm(userLocation, friend).toFixed(1)} km` : '--'; const popup = `<strong>${escapeHtml(friend.name)}</strong><br>${escapeHtml(friend.address)}<br>${escapeHtml(friend.phone)}<br>Distance: ${distance}`; markers.set(index, L.marker([friend.latitude, friend.longitude], { icon }).addTo(friendsMap).bindPopup(popup)); }); byId('friends').innerHTML = friends.length ? friends.map((friend, index) => `<tr><td>${escapeHtml(friend.name)}</td><td>${escapeHtml(friend.address)}</td><td>${escapeHtml(friend.phone)}</td><td class="right">${userLocation ? `${distanceKm(userLocation, friend).toFixed(1)} km` : '--'}</td><td class="right"><button type="button" data-delete="${index}" class="secondary">Delete</button></td></tr>`).join('') : '<tr><td colspan="5">No friends added yet.</td></tr>'; }
+        friendsMap.on('click', (event) => {
+            byId('latitude').value = event.latlng.lat.toFixed(6);
+            byId('longitude').value = event.latlng.lng.toFixed(6);
+            byId('formStatus').textContent = 'Coordinates selected from map.';
+        });
+        byId('add').addEventListener('click', () => { const friend = { name: byId('name').value.trim(), address: byId('address').value.trim(), phone: byId('phone').value.trim(), latitude: Number(byId('latitude').value), longitude: Number(byId('longitude').value) }; if (!friend.name || !friend.address || !friend.phone || !Number.isFinite(friend.latitude) || !Number.isFinite(friend.longitude)) { byId('formStatus').textContent = 'Enter name, address, phone, latitude, and longitude.'; return; } friends.push(friend); save(); render(); friendsMap.setView([friend.latitude, friend.longitude], 10); byId('formStatus').textContent = 'Friend added locally.';['name', 'address', 'phone', 'latitude', 'longitude'].forEach((id) => byId(id).value = ''); });
+        byId('friends').addEventListener('click', (event) => { const button = event.target.closest('[data-delete]'); if (!button) return; friends.splice(Number(button.dataset.delete), 1); save(); render(); });
+        byId('locate').addEventListener('click', () => navigator.geolocation ? navigator.geolocation.getCurrentPosition((position) => { userLocation = { latitude: position.coords.latitude, longitude: position.coords.longitude }; friendsMap.setView([userLocation.latitude, userLocation.longitude], 10); render(); byId('formStatus').textContent = 'Distance calculations use your current location.' }, () => byId('formStatus').textContent = 'Location permission was not granted.') : byId('formStatus').textContent = 'Geolocation is not supported.');
+        byId('export').addEventListener('click', () => { const blob = new Blob([JSON.stringify(friends, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'filipino-friends-private.json'; link.click(); URL.revokeObjectURL(link.href); });
+        byId('importButton').addEventListener('click', () => byId('importFile').click()); byId('importFile').addEventListener('change', (event) => { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (!Array.isArray(imported)) throw new Error(); friends = imported; save(); render(); byId('formStatus').textContent = 'Private data imported.'; } catch (error) { byId('formStatus').textContent = 'Invalid friend data file.'; } }; reader.readAsText(file); });
+        render();
+    </script>
+</body>
+
+</html>
